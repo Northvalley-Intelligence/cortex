@@ -1,0 +1,18 @@
+{
+  "project_id": "cortex",
+  "updated_at": "2026-07-16",
+  "findings": [
+    {"id":"F-001","severity":"Critical","status":"resolved_by_design","category":"Technical","summary":"Ollama silently truncates prompts to num_ctx default (4096); advertised 131072 is not effective. HTTP 200 + plausible wrong answer.","resolution":"Per-call num_ctx + prompt_eval_count assertion + TruncationError. Verified real Ollama.","evidence":".mde/evidence/GEN-000-ollama-silent-truncation.md"},
+    {"id":"F-002","severity":"Critical","status":"fixed","category":"Correctness","summary":"attempt_no restarted at 1 on requeue -> UNIQUE collision -> requeued call marked failed. Broke machine-sleep recovery.","resolution":"Continue numbering from MAX(attempt_no)."},
+    {"id":"F-003","severity":"High","status":"fixed","category":"Correctness/Mission","summary":"system_prompt silently dropped (snake_case vs camelCase). Presented as a bad-prompt/model failure — the exact BDD-018 misattribution trap.","resolution":"normalizeCallInput accepts both spellings and throws on unknown fields."},
+    {"id":"F-004","severity":"High","status":"fixed","category":"Mission (NDCG integrity)","summary":"ndcgForJudgments returned 0 for a ranking with no parsed judgments — a confident wrong number.","resolution":"Refuse to score incomplete judgments; return null + error."},
+    {"id":"F-005","severity":"Medium","status":"fixed","category":"Correctness","summary":"Token estimator under-counted chat-template scaffolding ~2x (claimed to over-count).","resolution":"Measured overhead 48 tokens/message; layer-2 num_ctx check remains the authority."},
+    {"id":"F-006","severity":"Low","status":"open","category":"UI","summary":"Two empty tiles in the dashboard status strip (visual imbalance)."},
+    {"id":"F-007","severity":"Low","status":"deferred","category":"UI","summary":"Trace detail is raw JSON (browser viewer), not a designed trace page. Acceptable for an internal tool; a rendered trace view foregrounding the diagnosis block is a future enhancement."}
+  ],
+  "residual_risks": [
+    "Fairness floor number is a default pending OQ-4.",
+    "First live eval-reports NDCG blocked upstream (R-12) until candidate capture + stable IDs land in ecommmerce-eval.",
+    "Trace retention unbounded (R-11)."
+  ]
+}

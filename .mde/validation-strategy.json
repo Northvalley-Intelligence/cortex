@@ -1,0 +1,242 @@
+{
+  "strategy_id": "VALSTRAT-002",
+  "supersedes": "VALSTRAT-001",
+  "supersede_reason": "VALSTRAT-001 was the Control Center's generic starter strategy ('project-specific tests selected before implementation'). Generation 0 replaces it with a strategy selected for Cortex's actual artifact profiles: a local-first async backend service whose product is trace evidence.",
+  "project_id": "cortex",
+  "project_type": "backend service (async LLM execution + traceability) with an internal metrics/trace-inspection web UI",
+  "mission_version": "MISSION-2026-07-16-GEN-000",
+  "mission_phase": "Generation 0",
+  "updated_at": "2026-07-16",
+  "artifact_profiles": [
+    "backend_service",
+    "async_job_queue",
+    "llm_execution",
+    "provider_abstraction",
+    "trace_store",
+    "data_contract",
+    "web_ui",
+    "search_ir_evaluation"
+  ],
+  "tool_selection_rationale": "Tools are chosen for this project, not inherited. Cortex is a local async service with no client-facing surface, so client-content validators (content-integrity, pdf-margin-safety), mobile validators, and Lighthouse/SEO checks are explicitly NOT selected. The metrics dashboard is internal and single-user, so multi-user access-control and heavy a11y-compliance tooling are out of scope per MISSION.md:40 — but readability validation IS selected and is Critical, because MISSION.md:73 and :81 make the screens the way Ferosh reads system state, so a confusing screen is a genuine defect. Playwright is selected only for the dashboard's agent pre-review pass, not as a general test harness.",
+
+  "anti_demo_rule": "A Cortex scenario is invalid if it can pass while the trace is incomplete, the evaluated token count is unverified, or the provider was mocked at a layer that hides real failure behaviour. Provider-fallback and context-floor scenarios MUST run against a real local Ollama, or against a fake that reproduces the OBSERVED silent-truncation behaviour (HTTP 200 + truncated prompt_eval_count + plausible wrong answer). A polite mock that raises ContextWindowExceeded would let every context-floor scenario pass while the real system silently truncates.",
+
+  "selected_validations": [
+    {
+      "id": "VS-FUNC",
+      "category": "Functional",
+      "required": true,
+      "priority": "Critical",
+      "tools_or_methods": [
+        "scenario suite driving the real submission API over HTTP (harness selected with the stack in TASK-002)",
+        "real local Ollama at localhost:11434 for provider-truth scenarios",
+        "fault-injecting fake provider reproducing observed failure modes (429 quota, silent truncation, transport drop)",
+        "durable-store restart harness: kill the process mid-lease and restart to prove no work is lost or duplicated"
+      ],
+      "covers_bdds": ["BDD-001", "BDD-002", "BDD-003", "BDD-004", "BDD-005", "BDD-006", "BDD-013", "BDD-014"],
+      "reason": "Mission success is defined behaviourally: submit/retrieve, priority without starvation, fallback chain, durability. These are scenario-level facts about a running service and cannot be proven by unit tests over internals."
+    },
+    {
+      "id": "VS-TRACE",
+      "category": "Technical",
+      "subcategory": "Trace Integrity",
+      "required": true,
+      "priority": "Critical",
+      "tools_or_methods": [
+        "trace completeness assertion: every terminal call has input, output, provider, model, version, timing, status, and per-attempt fallback records",
+        "evaluated-vs-sent token assertion (prompt_eval_count == intended tokens) on every local call",
+        "secret-leak scan over the persisted trace store (no credential-shaped strings)",
+        "trace/metric reconciliation: dashboard aggregates recomputed from raw traces must match displayed values"
+      ],
+      "covers_bdds": ["BDD-007", "BDD-008", "BDD-009", "BDD-016"],
+      "reason": "Traceability is the mission's product, not a logging side-effect (MISSION.md:88). The Generation 0 truncation evidence proved a trace can look healthy while being false, so completeness alone is insufficient — the trace must record what the model ACTUALLY consumed."
+    },
+    {
+      "id": "VS-CTX",
+      "category": "Technical",
+      "subcategory": "Context Window Floor",
+      "required": true,
+      "priority": "Critical",
+      "tools_or_methods": [
+        "needle-at-start probe against real Ollama (.mde/evidence/probes/ollama-context-probe.py), asserting the needle survives",
+        "explicit per-call num_ctx assertion — never rely on provider defaults",
+        "eligible-handler floor computation test: declared window filters the provider set BEFORE routing",
+        "clear-failure test: an unsatisfiable declared window fails loudly and is never truncated"
+      ],
+      "covers_bdds": ["BDD-010", "BDD-011", "BDD-012"],
+      "reason": "Generation 0 empirically confirmed that advertised context length (131072) is 32x larger than the effective default window (4096), and that overflow is silent with HTTP 200. The floor CANNOT be computed from provider metadata; it must be probed and asserted. This is the single highest-risk technical claim in the mission."
+    },
+    {
+      "id": "VS-DURABLE",
+      "category": "Technical",
+      "subcategory": "Durability",
+      "required": true,
+      "priority": "Critical",
+      "tools_or_methods": [
+        "process-kill and restart harness mid-execution",
+        "machine sleep/wake simulation (pmset, or lease-expiry fast-forward) during an in-flight job",
+        "lease-expiry requeue test proving no call is stranded in 'executing'",
+        "at-least-once + idempotent-recording test proving requeue does not double-charge a paid provider"
+      ],
+      "covers_bdds": ["BDD-004", "BDD-005"],
+      "reason": "MISSION.md:45 requires tolerating the machine being off and resuming cleanly; MISSION.md:85 names lost/duplicated/stuck jobs as the top async risk. 'Machine sleep during a job' is a named mission scenario."
+    },
+    {
+      "id": "VS-UI",
+      "category": "Usability / UI Standards",
+      "required": true,
+      "priority": "Critical",
+      "tools_or_methods": [
+        "Playwright-driven agent pre-review pass over the rendered dashboard",
+        "agent judgement checklist: crowded? over-complicated? redundant/repeated? hierarchy clear? does it actually show whether the system is doing its job?",
+        "canonical-status check: queue depth and provider health appear in ONE canonical place before being repeated",
+        "affordance integrity (central validator: validators/ui-standards/affordance-integrity.md)",
+        "diagnostic-usefulness test: from the dashboard alone, can an unreliable model and a failing prompt be identified?"
+      ],
+      "covers_bdds": ["BDD-015", "BDD-016", "BDD-017"],
+      "reason": "MISSION.md:73 and :81 require an agent to inspect the screens and report crowding/complexity/redundancy/clarity BEFORE Ferosh reviews, so review starts from a clean self-checked state. This is Critical rather than cosmetic because the screens are how Ferosh reads system state — a confusing screen is a real defect. Applies central issue signatures FAKE_BUTTON_OR_DEAD_ACTION and DUPLICATE_PRIMARY_ACTIONS; the ui-forms pack applies only partially (no data-entry forms here).",
+      "central_context_packs": ["context-packs/ui-forms.md"],
+      "known_environment_blocker": "The Command Center session records 'no browser backend available in this environment', which blocks browser-rendered screenshot validation. Confirm Playwright can actually drive a browser here before committing to this tooling (R-14)."
+    },
+    {
+      "id": "VS-MISSION",
+      "category": "Mission Coverage",
+      "required": true,
+      "priority": "Critical",
+      "tools_or_methods": [
+        "blame-the-prompt drill: inject a deliberately bad prompt, retrieve its trace by ID, and confirm the trace is sufficient to attribute the failure to the prompt and revise it",
+        "inverse drill: inject a harness fault (truncation) and confirm the trace does NOT wrongly implicate the prompt",
+        "BDD coverage check against BDD_COVERAGE_MODEL.md thresholds (100% Critical, 90% High)"
+      ],
+      "covers_bdds": ["BDD-009", "BDD-018"],
+      "reason": "MISSION.md:68 makes 'blame the prompt, not the model' a success criterion. The inverse drill is included because Generation 0 proved a harness fault can masquerade as a prompt fault — a trace that cannot distinguish the two actively misleads and fails the mission."
+    },
+    {
+      "id": "VS-IR",
+      "category": "Project-Specific External",
+      "subcategory": "NDCG / relevance correctness",
+      "required": true,
+      "priority": "High",
+      "tools_or_methods": [
+        "reuse retail-search/src/evaluation/metrics.js rather than reimplementing NDCG",
+        "validate against retail-search BEIR registry publishedBm25NdcgAt10 sanity targets (SciFact 0.665, NFCorpus 0.325, TREC-COVID 0.656)",
+        "judgment stability check: same (query, product) judged repeatedly at temperature 0 to measure LLM judge variance",
+        "human spot-check of a small labelled sample before any NDCG number is published"
+      ],
+      "covers_bdds": ["BDD-019", "BDD-020"],
+      "reason": "MISSION.md:93 names plausible-but-wrong NDCG as a risk, and MISSION.md:77 asks for correctness against a known reference. Generation 0 found that reference already exists in retail-search, and that its NDCG implementation is textbook-correct — so the risk is not the math but the JUDGMENTS feeding it. Judge variance is therefore validated separately from metric correctness.",
+      "priority_note": "High rather than Critical for Generation 1 because the use case is blocked upstream (R-12); becomes Critical in the phase that delivers the live evaluation-reports path.",
+      "external_dependency": "retail-search (unregistered in central portfolio — see R-13)"
+    },
+    {
+      "id": "VS-CONTRACT",
+      "category": "Project-Specific External",
+      "subcategory": "Third-Person / consuming-project fit",
+      "required": true,
+      "priority": "High",
+      "tools_or_methods": [
+        "Third-Person Validation Gate: an agent adopts the caller's perspective (Command Center, evaluation-reports) and exercises the API contract",
+        "availability-vs-content failure semantics test (fallback fires ONLY on availability failures)",
+        "caller-side behaviour when the machine is off and when every provider is exhausted",
+        "provider-swap parity: identical job against local vs API provider with no caller change"
+      ],
+      "covers_bdds": ["BDD-006", "BDD-013", "BDD-021"],
+      "reason": "MISSION.md:81 requires an independent check of the consuming-project experience. Generation 0 found the Command Center's availability-vs-content distinction is a deliberate, comment-documented design decision; centralizing fallback in Cortex would silently destroy it and launder prompt defects into availability events."
+    },
+    {
+      "id": "VS-REPO",
+      "category": "Technical",
+      "subcategory": "MDE / repo hygiene",
+      "required": true,
+      "priority": "Medium",
+      "tools_or_methods": [
+        "JSON parse check across .mde/*.json",
+        "repository-ownership check: no writes outside the cortex repo",
+        "outbox schema check"
+      ],
+      "covers_bdds": ["BDD-022"],
+      "reason": "MISSION.md:48 forbids Cortex editing consuming projects. Cheap to check, and prevents a boundary violation that would be hard to unwind."
+    }
+  ],
+
+  "explicitly_not_selected": [
+    { "tool": "Lighthouse / SEO / axe-core full a11y suite", "reason": "Internal single-user diagnostic dashboard; MISSION.md:40 puts broader app-style UI out of scope. Readability is validated by agent pre-review instead." },
+    { "tool": "OWASP ZAP / auth penetration testing", "reason": "MISSION.md:40 puts multi-user access control out of scope and the service is loopback-only. A secret-leak scan over the trace store IS retained (VS-TRACE) because full input capture creates a real credential-persistence risk." },
+    { "tool": "validators/client-facing-content/content-integrity.md", "reason": "No client-facing or public content in this project." },
+    { "tool": "validators/pdf/pdf-margin-safety.md", "reason": "No PDF or print artifacts." },
+    { "tool": "validators/usability/form-data-preservation.md", "reason": "The dashboard has no data-entry forms; nothing to preserve across validation failure." },
+    { "tool": "Throughput / high-concurrency load testing at 1000+ calls", "reason": "Generation 0 evidence shows realistic jobs are ~10 calls and the historical maximum is ~200. Building and validating for thousands would be over-engineering against evidence. 'Live call under load' is validated at realistic scale (a live call contending with a ~10-call batch), which is the actual mission concern." }
+  ],
+
+  "named_mission_scenarios": [
+    {
+      "scenario": "live call under load",
+      "mission_ref": "MISSION.md:72",
+      "bdds": ["BDD-003"],
+      "validations": ["VS-FUNC"],
+      "priority": "Critical",
+      "anti_demo_note": "Must contend against a real queued batch, not a simulated delay. Realistic scale is a live call arriving behind a ~10-call job (~10 min of local work), which is the real-world harm."
+    },
+    {
+      "scenario": "quota exhaustion mid-batch",
+      "mission_ref": "MISSION.md:72",
+      "bdds": ["BDD-006", "BDD-013"],
+      "validations": ["VS-FUNC", "VS-CONTRACT"],
+      "priority": "Critical",
+      "anti_demo_note": "Must reproduce observed real exhaustion shapes: Gemini 429/quota AND OpenRouter 'Rate limit exceeded: free-models-per-day' (both observed live in the Command Center's llm-usage.jsonl). Mid-batch means the switch happens BETWEEN calls of one job, and every attempt and switch is recorded in the trace."
+    },
+    {
+      "scenario": "machine sleep during a job",
+      "mission_ref": "MISSION.md:72",
+      "bdds": ["BDD-004", "BDD-005"],
+      "validations": ["VS-DURABLE"],
+      "priority": "Critical",
+      "anti_demo_note": "Must prove BOTH no loss and no duplicate paid execution. A test that only proves the job resumes is insufficient."
+    },
+    {
+      "scenario": "prompt overflowing the smallest context window",
+      "mission_ref": "MISSION.md:72",
+      "bdds": ["BDD-010", "BDD-011", "BDD-012"],
+      "validations": ["VS-CTX"],
+      "priority": "Critical",
+      "anti_demo_note": "MUST run against real Ollama or an observed-behaviour fake. Generation 0 proved the real failure is SILENT (HTTP 200, wrong answer); a mock that raises a clean exception invalidates this scenario entirely."
+    },
+    {
+      "scenario": "trace lookup for a bad output",
+      "mission_ref": "MISSION.md:72",
+      "bdds": ["BDD-009", "BDD-018"],
+      "validations": ["VS-MISSION", "VS-TRACE"],
+      "priority": "Critical",
+      "anti_demo_note": "Must include the inverse case: a harness-caused bad output must NOT be attributable to the prompt. A trace that cannot tell prompt fault from harness fault fails the mission."
+    }
+  ],
+
+  "validation_gates": {
+    "required_pass_count_before_phase_exit": 2,
+    "second_pass_policy": "Risk-based. MUST rerun: all Critical validations (VS-FUNC, VS-TRACE, VS-CTX, VS-DURABLE, VS-UI, VS-MISSION); anything that failed in pass 1; anything affected by changed code or artifacts; anything tied to unresolved High risks; and all non-deterministic or environment-sensitive checks. For Cortex, LLM-backed checks (VS-IR judge variance, VS-MISSION drills) and real-provider checks (VS-CTX, quota scenarios) are inherently non-deterministic and are therefore NEVER skippable in pass 2. May skip VS-REPO when no .mde artifacts changed, with a recorded reason. Pass count resets if implementation, tests, strategy, or validator behaviour changes after pass 1.",
+    "self_qa_before_founder_review": "Agent pre-review of the dashboard (VS-UI) must run and its findings be resolved before Ferosh reviews any screen (MISSION.md:73, :81)."
+  },
+
+  "coverage_targets": {
+    "critical_mission_objectives": 100,
+    "high_mission_objectives": 90,
+    "source": "../mde/BDD_COVERAGE_MODEL.md"
+  },
+
+  "known_issue_signatures_applied": [
+    { "signature": "LOCAL_MODEL_SILENT_PROMPT_TRUNCATION", "status": "new — promoted to central by this generation", "validation": "VS-CTX", "evidence": ".mde/evidence/GEN-000-ollama-silent-truncation.md" },
+    { "signature": "FAKE_BUTTON_OR_DEAD_ACTION", "status": "central", "validation": "VS-UI" },
+    { "signature": "DUPLICATE_PRIMARY_ACTIONS", "status": "central", "validation": "VS-UI" }
+  ],
+
+  "known_issue_signatures_not_applicable": [
+    { "signature": "PDF_TEXT_OVERFLOW_MARGIN", "reason": "no PDF artifacts" },
+    { "signature": "PRINT_LAYOUT_PAGE_BREAK_OVERLAP", "reason": "no print artifacts" },
+    { "signature": "FORM_DATA_LOST_ON_VALIDATION_FAILURE", "reason": "no data-entry forms" },
+    { "signature": "DEAD_LINK_CLIENT_FACING_DOCUMENT", "reason": "no client-facing documents" },
+    { "signature": "CLIENT_FACING_PROCESS_COPY_LEAK", "reason": "internal tool, no client-facing copy" },
+    { "signature": "UNSUPPORTED_OPERATIONAL_CLAIM", "reason": "no client-facing claims" },
+    { "signature": "PLACEHOLDER_OR_UNAPPROVED_PROOF_PUBLISHED", "reason": "no published proof assets" },
+    { "signature": "VISUAL_PROOF_VARIETY_GAP", "reason": "no proof galleries" }
+  ]
+}

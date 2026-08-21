@@ -1,0 +1,7 @@
+{
+  "project_id": "cortex",
+  "generated_at": "2026-07-16",
+  "failing_bdds": [],
+  "not_started_required_bdds": [],
+  "note": "All 22 Critical/High/Medium BDDs pass. BDD-015's fairness NUMBER is a default pending OQ-4; its behaviour is validated. First live eval-reports NDCG (BDD-019 end-to-end wiring) is blocked upstream by R-12/OQ-6, but the NDCG path and math are validated in isolation."
+}

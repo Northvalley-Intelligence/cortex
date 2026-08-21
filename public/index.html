@@ -1,0 +1,313 @@
+<title>Cortex</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3;
+    --muted: #8b949e; --accent: #58a6ff; --ok: #3fb950; --warn: #d29922; --bad: #f85149;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  header { padding: 18px 24px; border-bottom: 1px solid var(--border); display: flex;
+    align-items: baseline; gap: 14px; }
+  header h1 { margin: 0; font-size: 18px; letter-spacing: .5px; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  header .chain { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  main { padding: 20px 24px; max-width: 1100px; }
+  /* One canonical status strip. Queue + provider health live here and nowhere else, so the
+     eye has a single place to read "is the system doing its job" (MISSION.md: canonical status). */
+  .strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px; background: var(--border); border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden; margin-bottom: 24px; }
+  .cell { background: var(--panel); padding: 14px 16px; }
+  .cell .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .4px; }
+  .cell .value { font-size: 26px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .cell .value.small { font-size: 16px; font-weight: 500; }
+  .value.ok { color: var(--ok); } .value.warn { color: var(--warn); } .value.bad { color: var(--bad); }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted);
+    margin: 28px 0 12px; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: .3px; }
+  tr:last-child td { border-bottom: none; }
+  td.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-family: var(--mono); }
+  .pill.ok { background: rgba(63,185,80,.15); color: var(--ok); }
+  .pill.warn { background: rgba(210,153,34,.15); color: var(--warn); }
+  .pill.bad { background: rgba(248,81,73,.15); color: var(--bad); }
+  .pill.muted { background: rgba(139,148,158,.12); color: var(--muted); }
+  code { font-family: var(--mono); color: var(--accent); }
+  .empty { color: var(--muted); padding: 18px; text-align: center; }
+  .foot { color: var(--muted); font-size: 12px; margin-top: 22px; }
+  a { color: var(--accent); text-decoration: none; }
+  .storage { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px;
+    display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  .storage .stat { font-size: 13px; } .storage .stat b { font-size: 16px; font-variant-numeric: tabular-nums; }
+  .storage .stat .k { color: var(--muted); font-size: 12px; display: block; }
+  .storage .actions { margin-left: auto; display: flex; gap: 8px; }
+  .storage button { background: var(--panel2, #0f141a); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+  .storage button:hover { border-color: var(--muted); }
+  .storage button.danger { color: var(--bad); border-color: rgba(248,81,73,.4); }
+  .storage button.confirm { background: rgba(248,81,73,.15); color: var(--bad); border-color: var(--bad); }
+  .storage .note { color: var(--muted); font-size: 12px; width: 100%; }
+  .windowbar { display: flex; align-items: center; gap: 10px; margin: 4px 0 18px; }
+  .windowbar .lead { color: var(--muted); font-size: 13px; }
+  .windowbar .opts { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+  .windowbar .opts button { background: transparent; color: var(--muted); border: none; border-right: 1px solid var(--border);
+    padding: 5px 12px; font-size: 13px; cursor: pointer; }
+  .windowbar .opts button:last-child { border-right: none; }
+  .windowbar .opts button.on { background: rgba(88,166,255,.15); color: var(--accent); }
+  .windowbar .note { color: var(--muted); font-size: 12px; margin-left: auto; }
+</style>
+
+<header>
+  <h1>CORTEX</h1>
+  <span class="sub">shared LLM execution &amp; traceability</span>
+  <span class="chain" id="chain"></span>
+  <a href="/viewer" style="margin-left:18px;color:var(--accent);text-decoration:none;font-size:13px">trace viewer →</a>
+  <a href="/settings" style="margin-left:16px;color:var(--accent);text-decoration:none;font-size:13px">settings →</a>
+</header>
+
+<main>
+  <!-- One window governs every reliability metric below, so the whole view shares one time
+       period. Queue depth and provider health are always live ("now"), noted on the right. -->
+  <div class="windowbar">
+    <span class="lead">Metrics window:</span>
+    <span class="opts" id="windowopts">
+      <button data-h="1">1h</button>
+      <button data-h="24" class="on">24h</button>
+      <button data-h="168">7d</button>
+      <button data-h="0">all</button>
+    </span>
+    <span class="note">counts, rates, latency &amp; cost are over this window · queue &amp; provider health are live</span>
+  </div>
+
+  <!-- Canonical status strip: the one place system state is read. -->
+  <div class="strip" id="strip"></div>
+
+  <h2>Providers &mdash; reliability at a glance</h2>
+  <table id="providers"><tbody><tr><td class="empty">loading&hellip;</td></tr></tbody></table>
+
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:22px 0 10px">
+    <h2 style="margin:0">Calls</h2>
+    <div id="callfilters" style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;font-size:12px"></div>
+  </div>
+  <div id="callpager" style="display:flex;gap:14px;align-items:center;font-size:12px;color:var(--muted);margin:0 2px 10px"></div>
+  <table id="traces"><tbody><tr><td class="empty">loading&hellip;</td></tr></tbody></table>
+
+  <div class="foot" id="foot"></div>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const pct = (x) => x == null ? "—" : (x * 100).toFixed(0) + "%";
+  const ms = (x) => x == null ? "—" : x >= 1000 ? (x / 1000).toFixed(1) + "s" : Math.round(x) + "ms";
+  const money = (x) => x ? "$" + x.toFixed(4) : "$0";
+  const relTime = (t) => {
+    if (!t) return "—";
+    const s = Math.floor((Date.now() - t) / 1000);
+    if (s < 5) return "just now";
+    if (s < 60) return s + "s ago";
+    const m = Math.floor(s / 60); if (m < 60) return m + "m ago";
+    const h = Math.floor(m / 60); if (h < 24) return h + "h ago";
+    const d = Math.floor(h / 24); if (d < 7) return d + "d ago";
+    return new Date(t).toLocaleDateString();
+  };
+  const absTime = (t) => t ? new Date(t).toLocaleString() : "";
+
+  function statusPill(s) {
+    const cls = { succeeded: "ok", failed: "bad", exhausted: "bad", executing: "warn", queued: "muted" }[s] || "muted";
+    return `<span class="pill ${cls}">${s}</span>`;
+  }
+
+  // Show the full provider path, not just the final resolver, so a fallback stays visible in
+  // the list. A failed hop is dimmed and struck through; the arrow shows the handoff.
+  function providerPath(t) {
+    const path = t.provider_path || [];
+    if (path.length <= 1) return t.provider_id ? `<code>${t.provider_id}</code>` : (path[0] ? `<code>${path[0].provider}</code>` : "—");
+    return path.map((a) => {
+      const ok = a.status === "succeeded";
+      const style = ok ? "" : "opacity:.5;text-decoration:line-through";
+      return `<code style="${style}" title="${a.status}${a.failure_kind ? " · " + a.failure_kind : ""}">${a.provider}</code>`;
+    }).join(' <span style="color:var(--muted)">→</span> ');
+  }
+
+  // Provider failure rate over the selected window. "—" when the provider had no attempts in
+  // the window, so an idle provider never shows a misleading 0%. The tooltip splits the rate
+  // into availability (couldn't answer → drove fallback) vs content (answered badly), and
+  // gives the attempt count so 100%-over-1 isn't read like 100%-over-200.
+  function failCell(p) {
+    if (!p.attempts) return '<span style="color:var(--muted)">—</span>';
+    const rate = p.failure_rate ?? 0;
+    const cls = rate > 0.2 ? "bad" : rate > 0 ? "warn" : "ok";
+    const title = `${p.attempts} attempt(s) in window · availability ${pct(p.availability_failure_rate)} · content ${pct(p.content_failure_rate)}`;
+    return `<span class="pill ${cls}" title="${title}">${pct(rate)}</span>`;
+  }
+
+  // The selected metrics window, in ms (0 = all time). Governs every reliability metric below.
+  let windowMs = 24 * 3600_000;
+
+  // Quota status derived from each provider's most recent attempt. 'exhausted' = currently
+  // rate-limited; 'recovered' = hit quota earlier in the window but answering again now.
+  function quotaPill(status, hits) {
+    if (status === "exhausted") return '<span class="pill bad">exhausted</span>';
+    if (status === "recovered") return `<span class="pill warn" title="${hits} quota hit(s) earlier">recovered</span>`;
+    return '<span class="pill ok">ok</span>';
+  }
+
+  // Live call vs batch job-call. A job-call also shows which job it belongs to, since a
+  // batch's calls are otherwise indistinguishable from each other in this list.
+  function typePill(t) {
+    if (t.priority_class === "call") return '<span class="pill ok">call</span>';
+    const job = t.job_id ? ` <a href="/viewer?job=${t.job_id}"><code title="${t.job_id}">${t.job_id.slice(0, 12)}…</code></a>` : "";
+    return `<span class="pill muted">job</span>${job}`;
+  }
+
+  async function refresh() {
+    let health, metrics;
+    const sinceQ = windowMs > 0 ? `?since_ms=${Date.now() - windowMs}` : "";
+    try {
+      [health, metrics] = await Promise.all([
+        fetch("/v1/health").then((r) => r.json()),
+        fetch(`/v1/metrics${sinceQ}`).then((r) => r.json()),
+      ]);
+    } catch (e) { $("foot").textContent = "cannot reach cortex: " + e.message; return; }
+
+    $("chain").textContent = health.providers.map((p) => p.id + (p.ok ? "✓" : "✗")).join("  →  ");
+
+    const c = metrics.calls;
+    const q = health.queue || {};
+    const anyDown = health.providers.some((p) => !p.ok);
+    const truncClass = c.truncated_calls > 0 ? "bad" : "ok";
+    // Queue depth and provider health are LIVE (from /health), independent of the window.
+    // Everything else is scoped to the selected window. "Net failed" is call-level (caller saw
+    // it fail after all fallback); "Recovered" is provider failures fallback saved.
+    const jm = metrics.jobs || {};
+    const cache = jm.cache || {};
+    const cacheHitPct = cache.hit_rate_in_window != null ? ` (${pct(cache.hit_rate_in_window)} of judgments)` : "";
+    $("strip").innerHTML = [
+      cell("In queue (now)", ((q.queued_calls ?? 0) + (q.queued_job_calls ?? 0)), (q.queued_calls + q.queued_job_calls) > 0 ? "warn" : "", "small"),
+      cell("Executing (now)", (q.executing ?? 0), q.executing > 0 ? "warn" : ""),
+      cell("Jobs", jm.jobs_in_window ?? 0, (jm.jobs_in_window ?? 0) > 0 ? "ok" : "", "small", "batch jobs submitted in the selected window (an eval batch is one job of many calls)"),
+      cell("Succeeded", c.succeeded ?? 0, "ok"),
+      cell("Net failed", c.net_failed ?? 0, (c.net_failed ?? 0) > 0 ? "bad" : "ok", "", `${pct(c.net_failure_rate)} of calls in window, after all fallback`),
+      cell("Recovered", c.recovered_by_fallback ?? 0, (c.recovered_by_fallback ?? 0) > 0 ? "warn" : "", "", "provider failed but fallback saved the call — NOT a system failure"),
+      cell("Cache hits", cache.served_in_window ?? 0, (cache.served_in_window ?? 0) > 0 ? "ok" : "", "", `judgments answered from cache in this window${cacheHitPct} instead of re-running the model — activity over the window, NOT the cache's current size. The cache currently holds ${(cache.entries ?? 0).toLocaleString()} judgments (see Settings).`),
+      cell("Fallback rate", pct(c.fallback_rate), c.fallback_rate > 0.3 ? "warn" : ""),
+      cell("Truncated", c.truncated_calls ?? 0, truncClass),
+      cell("Providers up (now)", `${health.providers.filter((p) => p.ok).length}/${health.providers.length}`, anyDown ? "warn" : "ok", "small"),
+      cell("Live wait p90", ms(c.queue_wait_live_ms?.p90), ""),
+    ].join("");
+
+    // Every column here is over the selected window (attempts, fail rate, latency, cost), so
+    // there is one coherent time period rather than the old mix of all-time and per-interval.
+    $("providers").innerHTML = metrics.providers.length ? `
+      <thead><tr><th>Provider</th><th>Model</th><th>Quota</th><th>Attempts</th>
+        <th>Fail rate</th><th>p50</th><th>p90</th><th>Cost</th></tr></thead>
+      <tbody>${metrics.providers.map((p) => `<tr>
+          <td><code>${p.provider}</code></td><td>${p.model}</td>
+          <td>${quotaPill(p.quota_status, p.quota_hits)}</td>
+          <td class="num">${p.attempts}</td>
+          <td class="num">${failCell(p)}</td>
+          <td class="num">${ms(p.latency_p50_ms)}</td>
+          <td class="num">${ms(p.latency_p90_ms)}</td>
+          <td class="num">${money(p.cost_usd)}</td>
+        </tr>`).join("")}</tbody>` : `<tbody><tr><td class="empty">no calls in this window</td></tr></tbody>`;
+
+    $("foot").innerHTML = `Updated ${new Date().toLocaleTimeString()} &middot; API at <code>/v1</code> &middot; a trace ID is the handle to the exact input and output of any call.`;
+  }
+
+  // ---- Calls grid: filterable + paginated, owned separately from the status refresh so that
+  // typing in a filter and auto-refresh never fight (the filter bar renders once; only the
+  // table + pager re-render). This is the debugging surface — filter down, then click a row
+  // through to the viewer to read the exact prompt and output.
+  const cf = { type: "", status: "", provider: "", client: "", purpose: "", q: "" };
+  let callOffset = 0, callLimit = 25;
+  const ctlStyle = "background:var(--panel,#161b22);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:12px";
+
+  async function initFilters() {
+    let facets = { clients: [], purposes: [] }, providers = [];
+    try { facets = await fetch("/v1/facets").then((r) => r.json()); } catch {}
+    try { providers = (await fetch("/v1/health").then((r) => r.json())).providers.map((p) => p.id); } catch {}
+    const sel = (key, label, opts) =>
+      `<select data-f="${key}" style="${ctlStyle}"><option value="">${label}</option>` +
+      opts.map((o) => `<option value="${o}">${o}</option>`).join("") + `</select>`;
+    $("callfilters").innerHTML =
+      sel("type", "type: all", ["call", "job"]) +
+      sel("status", "status: all", ["succeeded", "failed", "exhausted", "executing", "queued"]) +
+      sel("provider", "provider: all", providers) +
+      sel("client", "client: all", facets.clients) +
+      sel("purpose", "purpose: all", facets.purposes) +
+      `<input data-f="q" placeholder="search id / client / purpose" style="${ctlStyle};min-width:200px"/>` +
+      `<select id="cfsize" style="${ctlStyle}"><option value="25">25/page</option><option value="50">50/page</option><option value="100">100/page</option></select>` +
+      `<button id="cfclear" style="${ctlStyle};cursor:pointer">clear</button>`;
+    let t;
+    $("callfilters").querySelectorAll("[data-f]").forEach((node) => {
+      const evt = node.tagName === "INPUT" ? "input" : "change";
+      node.addEventListener(evt, () => {
+        clearTimeout(t);
+        t = setTimeout(() => { cf[node.dataset.f] = node.value.trim(); callOffset = 0; loadCalls(); }, node.tagName === "INPUT" ? 300 : 0);
+      });
+    });
+    $("cfsize").onchange = (e) => { callLimit = Number(e.target.value); callOffset = 0; loadCalls(); };
+    $("cfclear").onclick = () => {
+      for (const k in cf) cf[k] = "";
+      callOffset = 0;
+      $("callfilters").querySelectorAll("[data-f]").forEach((n) => (n.value = ""));
+      loadCalls();
+    };
+  }
+
+  async function loadCalls() {
+    const qs = new URLSearchParams({ limit: callLimit, offset: callOffset });
+    for (const k of ["type", "status", "provider", "client", "purpose", "q"]) if (cf[k]) qs.set(k, cf[k]);
+    let data;
+    try { data = await fetch(`/v1/traces?${qs}`).then((r) => r.json()); } catch { return; }
+    const rows = data.traces || [];
+    $("traces").innerHTML = rows.length ? `
+      <thead><tr><th>Trace</th><th>Type</th><th>Client</th><th>Purpose</th><th>Status</th>
+        <th>Provider</th><th>Attempts</th><th>When</th><th></th></tr></thead>
+      <tbody>${rows.map((t) => `
+        <tr>
+          <td><code>${t.trace_id.slice(0, 16)}…</code></td>
+          <td>${typePill(t)}</td>
+          <td>${t.client}</td><td>${t.purpose || "—"}</td>
+          <td>${statusPill(t.status)}${t.truncated ? ' <span class="pill bad">truncated</span>' : ""}</td>
+          <td>${providerPath(t)}</td>
+          <td class="num">${t.attempt_count}</td>
+          <td title="${absTime(t.submitted_at)}" style="color:var(--muted);white-space:nowrap">${relTime(t.submitted_at)}</td>
+          <td><a href="/viewer?trace=${t.trace_id}">view</a></td>
+        </tr>`).join("")}</tbody>` : `<tbody><tr><td class="empty">no calls match these filters</td></tr></tbody>`;
+
+    const from = data.total ? data.offset + 1 : 0, to = data.offset + rows.length;
+    const pages = Math.max(1, Math.ceil(data.total / callLimit)), cur = Math.floor(data.offset / callLimit) + 1;
+    const lnk = (label, off) => `<a data-off="${off}" style="color:var(--accent);text-decoration:none;cursor:pointer">${label}</a>`;
+    const dis = (label) => `<span style="opacity:.35">${label}</span>`;
+    $("callpager").innerHTML =
+      `<span>${from}–${to} of ${data.total.toLocaleString()} calls</span>` +
+      (data.offset > 0 ? lnk("← prev", Math.max(0, callOffset - callLimit)) : dis("← prev")) +
+      `<span>page ${cur}/${pages}</span>` +
+      (to < data.total ? lnk("next →", callOffset + callLimit) : dis("next →"));
+    $("callpager").querySelectorAll("a[data-off]").forEach((a) => (a.onclick = () => { callOffset = Number(a.dataset.off); loadCalls(); }));
+  }
+
+  function cell(label, value, cls = "", size = "", title = "") {
+    return `<div class="cell"${title ? ` title="${title}"` : ""}><div class="label">${label}</div><div class="value ${cls} ${size}">${value}</div></div>`;
+  }
+
+  // Window selector — one control governs every reliability metric on the page.
+  $("windowopts").addEventListener("click", (e) => {
+    const btn = e.target.closest("button"); if (!btn) return;
+    windowMs = Number(btn.dataset.h) * 3600_000;
+    [...$("windowopts").children].forEach((b) => b.classList.toggle("on", b === btn));
+    refresh();
+  });
+
+  refresh();
+  initFilters().then(loadCalls);
+  setInterval(refresh, 3000);
+  // Refresh the grid in place, preserving the operator's filters and current page.
+  setInterval(loadCalls, 4000);
+</script>

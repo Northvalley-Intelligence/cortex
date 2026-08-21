@@ -1,0 +1,13 @@
+{
+  "project_id": "cortex",
+  "updated_at": "2026-07-16",
+  "validators": [
+    {"validator_id":"VS-CTX-real-ollama","status":"useful","usefulness":"critical","notes":"Only the real-provider run exposes silent truncation. A polite mock would have passed while hiding the mission's top technical risk. Highest-signal validator in the suite."},
+    {"validator_id":"VS-DURABLE-sigkill","status":"useful","usefulness":"high","notes":"A real SIGKILL mid-lease proved durability that an in-memory flag would fake. Also surfaced the attempt_no requeue-collision bug."},
+    {"validator_id":"VS-TRACE-diagnosis","status":"useful","usefulness":"high","notes":"The inverse drill (harness fault must not be blamed on prompt) caught the dropped-system-prompt misattribution."},
+    {"validator_id":"third-person-caller-review","status":"useful","usefulness":"high","notes":"Found two HIGH silent-correctness bugs the first-party suite missed because it only sent well-formed input. Strong argument for keeping an adversarial caller-perspective pass in the gate."},
+    {"validator_id":"VS-IR-drift-check","status":"useful","usefulness":"medium","notes":"Byte-for-byte vendored-metric drift guard; cheap and prevents a second divergent NDCG."},
+    {"validator_id":"VS-UI-agent-pre-review","status":"useful","usefulness":"medium","notes":"Real-data dashboard review; 2 Low findings, no Critical/High. Confirmed the dashboard surfaces an unreliable provider at a glance."},
+    {"validator_id":"token-estimate-vs-eval","status":"noisy-but-valuable","usefulness":"medium","notes":"Layer-1 estimate is deliberately imprecise; caught its own 2x under-count against the real model. Layer-2 (prompt_eval_count) remains the authority."}
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "generation_id": "GEN-000",
+  "project_id": "cortex",
+  "started_at": "2026-07-16",
+  "ended_at": "2026-07-16",
+  "mission_phase": "Generation 0",
+  "mission_version": "MISSION-2026-07-16-GEN-000",
+  "validation_strategy_version": "VALSTRAT-001",
+  "status": "complete",
+  "focus": "Bootstrap a new MDE project from name and mission.",
+  "reason_started": "The project was created from Control Center inputs.",
+  "reason_ended": "Mission, local MDE state, validation strategy, BDD index, outbox, and initial evidence were created.",
+  "files_changed_by_category": {
+    "human_artifacts": [
+      "MISSION.md",
+      "MISSION_UPDATES.md",
+      "README.md"
+    ],
+    "agent_artifacts": [
+      ".mde/project.json",
+      ".mde/state.json",
+      ".mde/validation-strategy.json",
+      ".mde/bdd-index.json",
+      ".mde/failing-bdds.json",
+      ".mde/progress.json",
+      ".mde/findings.json",
+      ".mde/validator-effectiveness.json",
+      ".mde/generation-summary.md",
+      ".mde/generations/GEN-000.json",
+      ".mde/validation-runs/VAL-000.json",
+      ".mde/outbox/portfolio-sync.json"
+    ]
+  },
+  "validators_executed": [
+    {
+      "name": "control-center project creation",
+      "category": "Mission Coverage / Technical",
+      "result": "pass",
+      "evidence": "Project name and mission produced parseable local MDE artifacts."
+    }
+  ],
+  "validators_skipped": [
+    {
+      "name": "project-specific implementation validation",
+      "reason": "No implementation generation has started yet."
+    }
+  ],
+  "validation_gate": {
+    "result": "pass",
+    "pass_count": 1,
+    "failed_categories": [],
+    "blocking_findings": []
+  },
+  "next_recommended_actions": [
+    "Review the mission and generate project-specific BDD scenarios before implementation.",
+    "Define the first implementation generation and validation strategy refinements."
+  ]
+}

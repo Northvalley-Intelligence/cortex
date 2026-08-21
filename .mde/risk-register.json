@@ -1,0 +1,17 @@
+{
+  "project_id": "cortex",
+  "updated_at": "2026-07-16",
+  "risks": [
+    {"id":"R-01","severity":"high","status":"mitigated","summary":"Async correctness: jobs lost/duplicated/stuck on machine sleep.","mitigation":"Durable SQLite leases with expiry; reclaimed on restart. Verified incl. real SIGKILL mid-lease (VS-DURABLE)."},
+    {"id":"R-02","severity":"high","status":"mitigated","summary":"Silent prompt truncation on the local model.","mitigation":"num_ctx set per call; prompt_eval_count asserted; TruncationError on overflow; verified against real Ollama (VS-CTX). Confirmed by Gen-0 probe."},
+    {"id":"R-03","severity":"high","status":"mitigated","summary":"Fallback launders a prompt defect into an availability event.","mitigation":"Availability-vs-content classification; content failures do not fall through; diagnosis attributes correctly (VS-TRACE, BDD-013)."},
+    {"id":"R-04","severity":"high","status":"mitigated","summary":"Trace store becomes a credential store (full input capture).","mitigation":"Post-redaction payload captured; deep redact; secret-leak scan over the store. OQ-3 confirms boundary."},
+    {"id":"R-05","severity":"medium","status":"mitigated","summary":"Plausible-but-wrong NDCG.","mitigation":"Reuse retail-search metric verbatim + drift check; refuse to score incomplete judgments; report real k. Judge variance test."},
+    {"id":"R-06","severity":"medium","status":"mitigated","summary":"Metrics disagree with traces.","mitigation":"Metrics computed from the same attempts rows; reconciliation asserted (BDD-016)."},
+    {"id":"R-07","severity":"medium","status":"open","summary":"Priority starvation in either direction.","mitigation":"Call-over-job priority + fairness floor with a disabled-floor control test. Floor NUMBER is OQ-4 (default every 4th dispatch)."},
+    {"id":"R-11","severity":"low","status":"open","summary":"Trace retention is unbounded; no correction/redaction-after-fact path.","mitigation":"Deferred. Flag for a retention policy decision."},
+    {"id":"R-12","severity":"high","status":"open","summary":"First live use case (eval-reports NDCG) blocked upstream: only 8 candidates captured, no stable product IDs.","mitigation":"Handoff in HANDOFF.md; Cortex must not edit ecommmerce-eval. OQ-6."},
+    {"id":"R-13","severity":"low","status":"open","summary":"retail-search is unregistered in the central portfolio but Cortex now depends on it (NDCG reuse).","mitigation":"Vendored verbatim with SHA drift check; register retail-search centrally."},
+    {"id":"R-14","severity":"low","status":"resolved","summary":"Browser backend was reported unavailable in a sibling session, threatening VS-UI screenshot review.","mitigation":"Chrome automation worked here; dashboard reviewed live with real data (GEN-001-ui-pre-review.md)."}
+  ]
+}

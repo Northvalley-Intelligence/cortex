@@ -1,0 +1,36 @@
+{
+  "generation_id": "GEN-001",
+  "project_id": "cortex",
+  "started_at": "2026-07-16",
+  "ended_at": "2026-07-16",
+  "mission_phase": "Generation 1 — full service",
+  "mission_version": "MISSION-2026-07-16-GEN-000",
+  "validation_strategy_version": "VALSTRAT-002",
+  "status": "validation_gate_passed_twice",
+  "focus": "Implement the shared LLM execution service end to end and validate it against real providers.",
+  "reason_started": "Ferosh directed implementation to proceed and iterate until validations pass.",
+  "reason_ended": "Validation Gate passed twice (58 tests, 6/6 categories) with real Ollama enforced; proven end-to-end against real providers including a live quota-exhaustion fallback.",
+  "files_changed_by_category": {
+    "human_artifacts": ["HANDOFF.md", "README.md"],
+    "service_source": ["src/config.mjs","src/db.mjs","src/failures.mjs","src/tokens.mjs","src/queue.mjs","src/executor.mjs","src/redact.mjs","src/trace.mjs","src/metrics.mjs","src/worker.mjs","src/api.mjs","src/server.mjs","src/relevance.mjs","src/providers/ollama.mjs","src/providers/openai-compatible.mjs","src/providers/index.mjs","src/vendor/retail-search-metrics.mjs","public/index.html"],
+    "tests": ["test/queue-priority.test.mjs","test/durability.test.mjs","test/context-floor.test.mjs","test/fallback.test.mjs","test/trace-integrity.test.mjs","test/api.test.mjs","test/relevance.test.mjs","test/helpers/fake-provider.mjs"],
+    "agent_artifacts": [".mde/mission-clarification.md",".mde/validation-strategy.json",".mde/bdd-index.json",".mde/risk-register.json",".mde/task-graph.json",".mde/findings.json",".mde/state.json",".mde/validation-runs/VAL-001.json",".mde/evidence/GEN-000-ollama-silent-truncation.md",".mde/evidence/GEN-001-ui-pre-review.md",".mde/evidence/probes/ollama-context-probe.py",".mde/outbox/lessons.jsonl",".mde/outbox/impacts.jsonl",".mde/outbox/skill-update-candidates.jsonl"]
+  },
+  "validators_executed": [
+    {"name":"VS-FUNC","result":"pass","usefulness":"high"},
+    {"name":"VS-DURABLE","result":"pass","usefulness":"high","note":"real SIGKILL mid-lease caught the value of durable leases"},
+    {"name":"VS-CTX (real Ollama)","result":"pass","usefulness":"critical","note":"only real-provider run exposes silent truncation; a mock would have hidden it"},
+    {"name":"VS-TRACE+VS-MISSION","result":"pass","usefulness":"high","note":"caught the system_prompt misattribution trap"},
+    {"name":"VS-FALLBACK+VS-CONTRACT","result":"pass","usefulness":"high"},
+    {"name":"VS-IR","result":"pass","usefulness":"high","note":"drift check + incomplete-judgment guard"},
+    {"name":"VS-UI agent pre-review","result":"pass","usefulness":"high","note":"real-data dashboard, 2 Low findings"}
+  ],
+  "validators_skipped": [
+    {"name":"1000+ call load test","reason":"Over-engineering vs evidence: realistic jobs are ~10 calls, historical max ~200 (Gen-0 survey)."}
+  ],
+  "validation_gate": {"result":"pass","pass_count":2,"real_provider_enforced":true,"failed_categories":[],"blocking_findings":[]},
+  "reusable_lessons": ["LOCAL_MODEL_SILENT_PROMPT_TRUNCATION","harness-fault-must-not-be-misattributed-to-prompt"],
+  "downstream_impacts": ["mde-control-center retrofit","ecommmerce-eval relevance path (blocked upstream)","retail-search dependency"],
+  "evidence_quality_notes": "Strong: real-provider runs, real SIGKILL, live quota exhaustion, metric/trace reconciliation. Weakest area is judge-variance breadth (single-run stability shown; a larger repeated-judgment study is a Gen-2 item).",
+  "loc_context": "Service + tests are compact and comment-dense by intent; each non-obvious guard cites the mission line or the failure it prevents. LOC is evidence, not a goal."
+}

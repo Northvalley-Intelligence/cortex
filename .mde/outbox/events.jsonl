@@ -1,0 +1,2 @@
+{"id":"EVT-000","date":"2026-07-16","project_id":"cortex","type":"project_created","confidentiality":"private","summary":"Project created by MDE Control Center from project name and mission.","central_worthy":true}
+{"id":"EVT-001","date":"2026-07-16","project_id":"cortex","type":"generation_complete","confidentiality":"private","central_worthy":true,"summary":"GEN-001: shared LLM execution service implemented; Validation Gate passed twice (58 tests, real Ollama enforced). Proven end-to-end against real providers including a live Gemini quota-exhaustion fallback."}

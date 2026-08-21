@@ -1,0 +1,15 @@
+{
+  "name": "cortex",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared LLM execution service for Northvalley Intelligence projects.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env.local src/server.mjs",
+    "test": "node --env-file-if-exists=.env.local --test \"test/*.test.mjs\"",
+    "validate": "node --env-file-if-exists=.env.local scripts/validation-gate.mjs"
+  }
+}

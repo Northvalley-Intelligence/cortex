@@ -1,0 +1,15 @@
+{
+  "project_id": "cortex",
+  "updated_at": "2026-07-16",
+  "tasks": [
+    {"id":"TASK-001","status":"done","summary":"Generation 0: mission clarification, validation strategy, BDD inventory, risk register."},
+    {"id":"TASK-002","status":"done","summary":"Choose stack (zero-dep Node + node:sqlite) and implement queue, providers, executor, trace, metrics, API, worker."},
+    {"id":"TASK-003","status":"done","summary":"Context-window floor + real-Ollama truncation detection."},
+    {"id":"TASK-004","status":"done","summary":"Relevance/NDCG path reusing retail-search metric."},
+    {"id":"TASK-005","status":"done","summary":"Dashboard + agent pre-review (VS-UI)."},
+    {"id":"TASK-006","status":"done","summary":"BDD scenario suite + Validation Gate passed twice with real Ollama enforced."},
+    {"id":"TASK-007","status":"done","summary":"HANDOFF.md for Command Center + evaluation-reports (no cross-repo writes)."},
+    {"id":"TASK-008","status":"blocked","summary":"Wire Command Center + eval-reports to Cortex.","blocked_by":"Ferosh triggers from THOSE repos' sessions (MISSION.md:48) + OQ-1/2/6."},
+    {"id":"TASK-009","status":"next","summary":"Ferosh decisions OQ-1..OQ-6; then finalize provider order and fairness floor."}
+  ]
+}

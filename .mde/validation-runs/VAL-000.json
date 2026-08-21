@@ -1,0 +1,28 @@
+{
+  "validation_run_id": "VAL-000",
+  "project_id": "cortex",
+  "generation_id": "GEN-000",
+  "run_at": "2026-07-16",
+  "gate": "primary",
+  "result": "pass",
+  "categories": [
+    {
+      "category": "Mission Coverage",
+      "result": "pass",
+      "evidence": "MISSION.md contains the captured mission."
+    },
+    {
+      "category": "Technical",
+      "result": "pass",
+      "evidence": "Required local MDE artifact files were written."
+    }
+  ],
+  "critical_findings": [],
+  "high_findings": [],
+  "skipped_validations": [
+    {
+      "category": "Implementation validation",
+      "reason": "No implementation has started."
+    }
+  ]
+}

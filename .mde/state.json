@@ -1,0 +1,58 @@
+{
+  "project_id": "cortex",
+  "updated_at": "2026-07-17",
+  "current_phase": "Generation 1 \u2014 full service implementation",
+  "active_generation": "GEN-002",
+  "phase_goal": "Deliver the shared LLM execution service: submit-and-retrieve API, durable priority queue, provider fallback chain, context-window floor, full traceability, metrics dashboard, and the relevance/NDCG path.",
+  "mission_status": "implemented",
+  "implementation_status": "validation_gate_passed_twice",
+  "validation_gate": {
+    "latest_result": "pass",
+    "pass_count": 2,
+    "latest_run_id": "VAL-002",
+    "required_before_phase_exit": 2,
+    "real_provider_enforced": true
+  },
+  "active_blockers": [],
+  "pending_approvals": [
+    "OQ-1 provider order (local-first vs cloud-first, MISSION.md:45 vs :32 contradict)",
+    "OQ-2 Command Center: wait_ms drop-in vs full async migration",
+    "OQ-3 confirm full-input capture means post-redaction provider payload only",
+    "OQ-4 fairness floor number (default: job-call every 4th dispatch)",
+    "OQ-5 relevance grading scale (default: 0-3 graded)",
+    "OQ-6 whether Gen 1 scope includes the eval-reports candidate-capture handoff"
+  ],
+  "next_recommended_actions": [
+    "Ferosh: pick the next mission gap. Remaining: (A) evaluation-reports live use case (blocked upstream in ecommmerce-eval on 10+ candidate capture + stable product IDs, OQ-6); (B) Command Center retrofit (other repo, via HANDOFF.md); (C) provider output parity validation (local vs cloud answer comparability, MISSION.md:89); (D) LLM judge-variance study (BDD-020 breadth).",
+    "Ferosh: answer OQ-1..OQ-6 (still open)."
+  ],
+  "applicable_learning_check": {
+    "performed_at": "2026-07-16",
+    "artifact_types_touched": [
+      "backend_service",
+      "async_job_queue",
+      "llm_execution",
+      "provider_abstraction",
+      "trace_store",
+      "web_ui",
+      "search_ir_evaluation"
+    ],
+    "central_context_packs_applied": [
+      "ui-forms (partial \u2014 no data-entry forms)"
+    ],
+    "known_issue_signatures_applied": [
+      "FAKE_BUTTON_OR_DEAD_ACTION",
+      "DUPLICATE_PRIMARY_ACTIONS"
+    ],
+    "known_issue_signatures_created": [
+      "LOCAL_MODEL_SILENT_PROMPT_TRUNCATION"
+    ],
+    "downstream_projects_affected": [
+      "mde-control-center",
+      "ecommmerce-eval",
+      "retail-search"
+    ],
+    "validation_strategy_update_needed": false
+  },
+  "completed_features_note": "Per-provider concurrency (MISSION.md:30) and dashboard quota status (MISSION.md:34) are now implemented and validated \u2014 the two partial in-scope items from the mission-coverage review."
+}

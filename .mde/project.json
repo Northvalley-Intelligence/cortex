@@ -1,0 +1,50 @@
+{
+  "project_id": "cortex",
+  "project_name": "Cortex",
+  "created_at": "2026-07-16",
+  "mission_version": "MISSION-2026-07-16-GEN-000",
+  "type": "product",
+  "repo_or_path": ".",
+  "status": "active",
+  "mde_status": "active",
+  "owner": "Ferosh",
+  "confidentiality": "private",
+  "business_role": "Shared LLM execution and traceability service for Northvalley Intelligence projects: a submit-and-retrieve API for latency-sensitive calls and batched jobs, a durable priority queue, a provider fallback chain (Gemini -> OpenRouter -> local), context-window floor enforcement, full input/output traceability by ID, and a metrics dashboard. Exists so language-model capability is durable shared infrastructure and every call is traceable enough to tell whether a bad answer was the prompt or the model.",
+  "mission_source": "control-center",
+  "mde_standard_source": "../mde",
+  "artifact_profiles": [
+    "backend_service",
+    "async_job_queue",
+    "llm_execution",
+    "provider_abstraction",
+    "trace_store",
+    "data_contract",
+    "web_ui",
+    "search_ir_evaluation"
+  ],
+  "context_packs": [
+    "ui-forms (partial — dashboard has no data-entry forms; affordance/duplicate-action checks apply)"
+  ],
+  "upstream_dependencies": [
+    "mde",
+    "retail-search (NDCG implementation, vendored verbatim — unregistered in central portfolio, see R-13)"
+  ],
+  "downstream_dependencies": [
+    "mde-control-center (retrofit its single LLM egress function onto Cortex)",
+    "ecommmerce-eval (relevance/NDCG via POST /v1/relevance; blocked upstream by candidate-capture + stable-id gaps, R-12)"
+  ],
+  "primary_artifacts": [
+    "submit-and-retrieve LLM API",
+    "durable priority queue",
+    "provider fallback chain",
+    "trace store keyed by ID",
+    "metrics dashboard",
+    "relevance/NDCG path"
+  ],
+  "current_session_status": "gen1_implemented_validation_gate_passed_twice",
+  "validation_strategy_status": "active",
+  "central_sync_status": "outbox_ready",
+  "latest_generation": "GEN-001",
+  "latest_validation_gate_result": "pass",
+  "notes": "Generation 0 (clarification, strategy, BDDs, risks) complete. Generation 1 implementation followed under Ferosh's explicit mid-session authorization; Validation Gate passed twice (67 tests, real Ollama enforced) with an independent third-person review. Six open decisions (OQ-1..OQ-6) await Ferosh. Cortex has not edited any consuming project (MISSION.md:48)."
+}

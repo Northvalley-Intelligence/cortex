@@ -1,0 +1,151 @@
+{
+  "validation_run_id": "VAL-001",
+  "project_id": "cortex",
+  "generation_id": "GEN-001",
+  "run_at": "2026-07-16",
+  "strategy_version": "VALSTRAT-002",
+  "gate": "phase-exit",
+  "result": "pass",
+  "pass_count": 2,
+  "passes": [
+    {
+      "pass": 1,
+      "result": "pass",
+      "categories_passed": 6,
+      "categories_total": 6,
+      "tests": 58,
+      "failed": 0,
+      "note": "initial pass before third-person review"
+    },
+    {
+      "pass": 2,
+      "result": "pass",
+      "categories_passed": 6,
+      "categories_total": 6,
+      "tests": 58,
+      "failed": 0
+    },
+    {
+      "pass": "reset",
+      "result": "n/a",
+      "note": "Third-person (VS-CONTRACT) review found HIGH-1 (HTTP boundary dropped typo'd system_prompt) and HIGH-2 (missing query_id fabricated NDCG). Both fixed + GAP-2 param passthrough. Pass count reset per policy: code changed after a clean pass."
+    },
+    {
+      "pass": "1 (post-fix)",
+      "result": "pass",
+      "categories_passed": 7,
+      "categories_total": 7,
+      "tests": 67,
+      "failed": 0,
+      "note": "added VS-CONTRACT-guards regression category (test/contract-guards.test.mjs)"
+    },
+    {
+      "pass": "2 (post-fix)",
+      "result": "pass",
+      "categories_passed": 7,
+      "categories_total": 7,
+      "tests": 67,
+      "failed": 0,
+      "note": "no code changes since post-fix pass 1; real Ollama enforced"
+    }
+  ],
+  "categories": [
+    {
+      "id": "VS-FUNC",
+      "category": "Functional",
+      "result": "pass",
+      "priority": "Critical",
+      "files": [
+        "test/queue-priority.test.mjs",
+        "test/api.test.mjs"
+      ],
+      "evidence": "16 tests. Real HTTP server, real socket. Live call served ahead of a batch; fairness floor forces job progress under continuous call load (with a disabled-floor control proving the floor does real work); partial job completion retrievable."
+    },
+    {
+      "id": "VS-DURABLE",
+      "category": "Technical/Durability",
+      "result": "pass",
+      "priority": "Critical",
+      "files": [
+        "test/durability.test.mjs"
+      ],
+      "evidence": "5 tests. Real on-disk SQLite across a process boundary; a real SIGKILL of a child mid-lease leaves a durable, reclaimable lease; requeue continues attempt numbering and does not duplicate a job's results."
+    },
+    {
+      "id": "VS-CTX",
+      "category": "Technical/Context-floor",
+      "result": "pass",
+      "priority": "Critical",
+      "files": [
+        "test/context-floor.test.mjs"
+      ],
+      "evidence": "9 tests. REAL Ollama: a ~12k-token prompt against num_ctx=2048 raised TruncationError not a returned answer (17s); an explicit 32768 window evaluated the whole prompt and the needle survived (76s). Eligibility filters on effective (not advertised) windows.",
+      "real_provider": true
+    },
+    {
+      "id": "VS-TRACE+VS-MISSION",
+      "category": "Technical/Trace + Mission Coverage",
+      "result": "pass",
+      "priority": "Critical",
+      "files": [
+        "test/trace-integrity.test.mjs"
+      ],
+      "evidence": "10 tests. Every terminal call has a complete trace; evaluated tokens recorded; metrics reconcile exactly with raw rows; truncated_calls metric known-zero in health and 1 under truncation; content failure diagnosed as prompt/model, truncation as harness (inverse drill), exhaustion as availability; trace store holds no credential-shaped strings."
+    },
+    {
+      "id": "VS-FALLBACK+VS-CONTRACT",
+      "category": "Functional/External",
+      "result": "pass",
+      "priority": "Critical/High",
+      "files": [
+        "test/fallback.test.mjs"
+      ],
+      "evidence": "7 tests. Observed exhaustion shapes (Gemini 429, OpenRouter free-models-per-day) classify as availability; content failures do NOT fall through; quota exhaustion mid-batch switches between calls and the batch still completes; exhausted stays distinct from failed; provider swap requires no caller change."
+    },
+    {
+      "id": "VS-IR",
+      "category": "Project-Specific External",
+      "result": "pass",
+      "priority": "High",
+      "files": [
+        "test/relevance.test.mjs"
+      ],
+      "evidence": "11 tests. Vendored retail-search NDCG verified byte-for-byte against upstream (SHA + suffix match); graded gain and idealDCG==0 guard correct; out-of-scale grades rejected not clamped; incomplete judgments return null not a confident 0; @10-over-8 reported as @8 with a warning."
+    }
+  ],
+  "live_end_to_end": {
+    "routing_call": "Real live Command Center-style routing call resolved on REAL Gemini, intent parsed correctly, trace captured.",
+    "relevance_job": "Real relevance job on the local model: rain jacket=3, t-shirt=0, windbreaker=1, backpack=1, nDCG 0.975.",
+    "live_fallback_observed": "Real Gemini 429 quota exhaustion occurred during the live run and fell over to local, captured in trace call_3823eb98 with the genuine Google quota error message \u2014 the named 'quota exhaustion' scenario proven against real providers, not simulated."
+  },
+  "critical_findings": [],
+  "high_findings": [],
+  "resolved_during_generation": [
+    "attempt_no collided with UNIQUE(call_id, attempt_no) on requeue -> would have broken machine-sleep recovery (BDD-005/014). Fixed: continue numbering from prior max.",
+    "system_prompt silently dropped (snake_case/camelCase mismatch) -> masqueraded as a bad-prompt/model failure. Fixed: normalizeCallInput throws on unknown fields. This is the BDD-018 trap and was caught by trace evidence.",
+    "ndcgForJudgments returned 0 for zero-judgment rankings -> plausible-wrong-number risk (MISSION.md:93). Fixed: refuses to score incomplete judgments.",
+    "token estimator under-counted chat scaffolding by ~2x. Fixed: measured overhead (48 tokens/message)."
+  ],
+  "skipped_validations": [
+    {
+      "category": "VS-REPO",
+      "reason": "Cheap parse/ownership checks; folded into general hygiene. No .mde JSON changed after the artifacts were written. Re-run before any commit."
+    },
+    {
+      "category": "VS-CONTRACT third-person live review",
+      "reason": "Running as an independent agent against the live server at time of writing; result appended separately."
+    }
+  ],
+  "anti_demo_confirmation": "Context-floor and fallback scenarios ran against real Ollama and reproduced-from-observation fakes, never a polite mock. The dashboard was reviewed with real data including a live quota exhaustion. No scenario can pass while the trace is incomplete or tokens unverified.",
+  "third_person_review": {
+    "evidence": ".mde/evidence/GEN-001-third-person-review.md",
+    "high_found": 2,
+    "high_fixed": 2,
+    "value": "Caught two silent-correctness bugs the first-party suite missed because it only sent well-formed input. Both were instances of the mission's own harness-fault-as-data-fault failure mode."
+  },
+  "live_verified_after_fix": {
+    "HIGH-1": "typo'd system_prompt -> HTTP 400 on live server",
+    "HIGH-2": "two queries missing query_id -> HTTP 400 on live server",
+    "valid_call": "still succeeds"
+  }
+}

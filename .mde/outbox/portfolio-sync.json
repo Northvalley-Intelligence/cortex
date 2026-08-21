@@ -1,0 +1,19 @@
+{
+  "project_id": "cortex",
+  "project_name": "Cortex",
+  "mde_status": "active",
+  "artifact_profiles": [
+    "mde_project",
+    "mission_driven_engineering"
+  ],
+  "context_packs": [],
+  "validation_strategy_status": "active",
+  "latest_generation": "GEN-000",
+  "latest_validation_gate_result": "pass",
+  "upstream_dependencies": [
+    "mde"
+  ],
+  "downstream_dependencies": [],
+  "repository_root": "/Users/feroshjacob/code/cortex",
+  "last_sync_note": "Created locally by MDE Control Center from project name and mission input."
+}

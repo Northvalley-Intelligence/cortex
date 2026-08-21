@@ -1,0 +1,353 @@
+<title>Cortex — Trace Viewer</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel2: #0f141a; --border: #30363d; --text: #e6edf3;
+    --muted: #8b949e; --accent: #58a6ff; --ok: #3fb950; --warn: #d29922; --bad: #f85149;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  header { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex;
+    align-items: baseline; gap: 12px; }
+  header h1 { margin: 0; font-size: 16px; letter-spacing: .5px; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  header a { color: var(--accent); text-decoration: none; margin-left: auto; font-size: 13px; }
+  .layout { display: flex; height: calc(100vh - 49px); }
+
+  /* left: job -> call tree */
+  .tree { width: 380px; min-width: 300px; border-right: 1px solid var(--border);
+    overflow-y: auto; background: var(--panel2); }
+  .tree .head { padding: 10px 16px; color: var(--muted); font-size: 12px; text-transform: uppercase;
+    letter-spacing: .4px; position: sticky; top: 0; background: var(--panel2); border-bottom: 1px solid var(--border); }
+  .grp { border-bottom: 1px solid var(--border); }
+  .row { padding: 8px 14px; cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+  .row:hover { background: rgba(88,166,255,.07); }
+  .row.sel { background: rgba(88,166,255,.15); }
+  .row .id { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+  .row .meta { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
+  .jobhead { padding: 9px 14px; cursor: pointer; display: flex; gap: 8px; align-items: center;
+    background: var(--panel); }
+  .jobhead:hover { background: rgba(139,148,158,.08); }
+  .jobhead .caret { color: var(--muted); width: 10px; display: inline-block; transition: transform .1s; }
+  .jobhead.open .caret { transform: rotate(90deg); }
+  .jobhead .jid { font-family: var(--mono); font-size: 12px; color: var(--text); }
+  .jobhead .counts { margin-left: auto; font-size: 12px; color: var(--muted); }
+  .calls { display: none; } .calls.open { display: block; }
+  .calls .row { padding-left: 30px; }
+
+  /* right: reusable detail panel */
+  .detail { flex: 1; overflow-y: auto; padding: 20px 26px; }
+  .detail .empty { color: var(--muted); margin-top: 40px; text-align: center; }
+  .dhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .dsub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .dsub code { color: var(--accent); }
+  .dsub a { color: var(--accent); text-decoration: none; }
+  .block { margin: 14px 0; }
+  .block > .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted);
+    margin-bottom: 5px; display: flex; align-items: center; gap: 8px; }
+  .block .lbl .copy { cursor: pointer; color: var(--muted); font-size: 11px; border: 1px solid var(--border);
+    border-radius: 4px; padding: 0 5px; }
+  .block .lbl .copy:hover { color: var(--text); }
+  pre.body { margin: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; font-family: var(--mono); font-size: 12.5px; line-height: 1.5;
+    white-space: pre-wrap; word-break: break-word; max-height: 340px; overflow: auto; color: var(--text); }
+  pre.body.out { border-color: rgba(63,185,80,.4); }
+  pre.body.err { border-color: rgba(248,81,73,.5); color: #ffb4ae; }
+  .diag { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; background: var(--panel);
+    margin: 16px 0; }
+  .diag .guide { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .diag.harness { border-color: rgba(210,153,34,.5); } .diag.ok { border-color: rgba(63,185,80,.4); }
+  .diag.availability { border-color: rgba(248,81,73,.4); } .diag.caller { border-color: rgba(88,166,255,.4); }
+  .attempts { margin-top: 10px; }
+  .att { border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; margin-bottom: 8px; background: var(--panel2); }
+  .att .top { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .att .nums { color: var(--muted); font-size: 12px; margin-left: auto; font-family: var(--mono); }
+  .att .emsg { color: #ffb4ae; font-size: 12px; margin-top: 6px; font-family: var(--mono); white-space: pre-wrap; word-break: break-word; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-family: var(--mono); }
+  .pill.ok { background: rgba(63,185,80,.15); color: var(--ok); }
+  .pill.warn { background: rgba(210,153,34,.15); color: var(--warn); }
+  .pill.bad { background: rgba(248,81,73,.15); color: var(--bad); }
+  .pill.muted { background: rgba(139,148,158,.12); color: var(--muted); }
+  .pill.accent { background: rgba(88,166,255,.15); color: var(--accent); }
+  code { font-family: var(--mono); }
+  .rawtoggle { color: var(--accent); cursor: pointer; font-size: 12px; margin-top: 18px; display: inline-block; }
+  h2.dtitle { font-size: 18px; margin: 0; }
+</style>
+
+<header>
+  <h1>CORTEX</h1><span class="sub">trace viewer</span>
+  <a href="/">← dashboard</a>
+</header>
+
+<div class="layout">
+  <div class="tree" id="tree"><div class="head" id="treehead"></div><div id="treebody"></div></div>
+  <div class="detail" id="detail"><div class="empty">Select a call on the left to see its prompt and output.</div></div>
+</div>
+
+<script>
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const short = (id) => (id || "").replace(/^(call|job)_/, "").slice(0, 8);
+  const ms = (x) => x == null ? "—" : x >= 1000 ? (x / 1000).toFixed(1) + "s" : Math.round(x) + "ms";
+  const absTime = (t) => t ? new Date(t).toLocaleString() : "";
+  const relTime = (t, compact = false) => {
+    if (!t) return "—";
+    const s = Math.floor((Date.now() - t) / 1000);
+    const suf = compact ? "" : " ago";
+    if (s < 5) return compact ? "now" : "just now";
+    if (s < 60) return s + "s" + suf;
+    const m = Math.floor(s / 60); if (m < 60) return m + "m" + suf;
+    const h = Math.floor(m / 60); if (h < 24) return h + "h" + suf;
+    const d = Math.floor(h / 24); if (d < 7) return d + "d" + suf;
+    return new Date(t).toLocaleDateString();
+  };
+  const statusCls = (s) => ({ succeeded: "ok", failed: "bad", exhausted: "bad", executing: "warn", queued: "muted" }[s] || "muted");
+  const params = new URLSearchParams(location.search);
+
+  // Pretty-print output when it is JSON (possibly wrapped in a ```json fence or <think>), else raw.
+  function formatOutput(text) {
+    if (!text) return "";
+    let t = String(text).replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+    const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const candidate = fence ? fence[1].trim() : t;
+    try { return JSON.stringify(JSON.parse(candidate), null, 2); } catch { return text; }
+  }
+
+  function copyBtn(getText) {
+    const b = document.createElement("span");
+    b.className = "copy"; b.textContent = "copy";
+    b.onclick = (e) => { e.stopPropagation(); navigator.clipboard?.writeText(getText()); b.textContent = "copied"; setTimeout(() => (b.textContent = "copy"), 1200); };
+    return b;
+  }
+
+  function block(label, text, cls = "") {
+    const wrap = document.createElement("div"); wrap.className = "block";
+    const lbl = document.createElement("div"); lbl.className = "lbl";
+    lbl.append(label); lbl.append(copyBtn(() => text));
+    const pre = document.createElement("pre"); pre.className = "body " + cls; pre.textContent = text;
+    wrap.append(lbl, pre); return wrap;
+  }
+
+  // "answered by openrouter" hides a fallback; when >1 provider was tried, show the path so
+  // the connection survives into the summary line too (the attempts section below has detail).
+  function resolutionSummary(t) {
+    const atts = t.attempts || [];
+    if (atts.length <= 1) return `answered by <code>${esc(t.resolved_by.provider)}</code> (${esc(t.resolved_by.model)})`;
+    const path = atts.map((a) => {
+      const style = a.status === "succeeded" ? "" : "opacity:.55;text-decoration:line-through";
+      return `<code style="${style}" title="${esc(a.status)}${a.failure_kind ? " · " + esc(a.failure_kind) : ""}">${esc(a.provider)}</code>`;
+    }).join(' <span style="color:var(--muted)">→</span> ');
+    return `answered via ${path}`;
+  }
+
+  async function loadDetail(id, rowEl) {
+    document.querySelectorAll(".row.sel").forEach((r) => r.classList.remove("sel"));
+    if (rowEl) rowEl.classList.add("sel");
+    const d = $("#detail"); d.innerHTML = '<div class="empty">loading…</div>';
+    let t;
+    try { t = await (await fetch(`/v1/traces/${encodeURIComponent(id)}`)).json(); }
+    catch (e) { d.innerHTML = `<div class="empty">could not load ${esc(id)}</div>`; return; }
+    if (t.error && !t.trace_id) { d.innerHTML = `<div class="empty">unknown trace</div>`; return; }
+
+    d.innerHTML = "";
+    const head = document.createElement("div"); head.className = "dhead";
+    head.innerHTML = `<h2 class="dtitle">${t.priority_class === "call" ? "Live call" : "Job call"}</h2>
+      <span class="pill ${statusCls(t.status)}">${esc(t.status)}</span>
+      ${t.attempts?.some((a) => a.truncation_detected) ? '<span class="pill bad">truncated</span>' : ""}`;
+    d.append(head);
+
+    const sub = document.createElement("div"); sub.className = "dsub";
+    sub.innerHTML = `${esc(t.client)} · ${esc(t.purpose || "—")} · <code>${esc(t.trace_id)}</code>` +
+      (t.resolved_by ? ` · ${resolutionSummary(t)}` : "") +
+      (t.job_id ? ` · part of <a href="?job=${encodeURIComponent(t.job_id)}">job ${esc(short(t.job_id))}</a>` : "") +
+      ` · <span title="${esc(absTime(t.timing?.submitted_at))}">${relTime(t.timing?.submitted_at)}</span>` +
+      ` · queue ${ms(t.timing?.queue_wait_ms)}, total ${ms(t.timing?.total_ms)}`;
+    d.append(sub);
+
+    if (t.input?.system_prompt) d.append(block("System prompt", t.input.system_prompt));
+    d.append(block("Prompt", t.input?.prompt ?? ""));
+    if (t.output != null && t.output !== "") d.append(block("Output", formatOutput(t.output), "out"));
+    if (t.error) d.append(block("Error — " + (t.error.code || ""), t.error.message || "", "err"));
+
+    if (t.diagnosis) {
+      const g = document.createElement("div"); g.className = "diag " + (t.diagnosis.fault || "ok");
+      g.innerHTML = `<div class="lbl" style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:5px">Diagnosis` +
+        ` <span class="pill ${t.diagnosis.fault === "harness" ? "warn" : t.diagnosis.fault === "availability" ? "bad" : t.diagnosis.fault === "prompt_or_model" ? "accent" : t.diagnosis.fault ? "muted" : "ok"}">${esc(t.diagnosis.fault || "clean")}</span></div>` +
+        `<div>${esc(t.diagnosis.summary || "")}</div>` +
+        (t.diagnosis.do_not_conclude ? `<div class="guide">⚠ ${esc(t.diagnosis.do_not_conclude)}</div>` : "") +
+        (t.diagnosis.next_step ? `<div class="guide">→ ${esc(t.diagnosis.next_step)}</div>` : "");
+      d.append(g);
+    }
+
+    const atLabel = document.createElement("div"); atLabel.className = "block";
+    atLabel.innerHTML = `<div class="lbl">Attempts (${t.attempts?.length || 0})</div>`;
+    const atWrap = document.createElement("div"); atWrap.className = "attempts";
+    (t.attempts || []).forEach((a) => {
+      const el = document.createElement("div"); el.className = "att";
+      const tok = a.tokens || {};
+      el.innerHTML = `<div class="top"><code>#${a.attempt_no}</code> <code>${esc(a.provider)}</code>` +
+        `<span class="pill ${statusCls(a.status)}">${esc(a.status)}</span>` +
+        (a.failure_kind ? `<span class="pill ${a.failure_kind === "harness" ? "warn" : "muted"}">${esc(a.failure_kind)}</span>` : "") +
+        (a.truncation_detected ? '<span class="pill bad">truncated</span>' : "") +
+        `<span class="nums">${ms(a.latency_ms)} · sent≈${tok.sent_estimate ?? "?"} eval ${tok.evaluated ?? "?"}${a.requested_num_ctx ? ` · num_ctx ${a.requested_num_ctx}` : ""}</span></div>` +
+        (a.error_message ? `<div class="emsg">${esc(a.error_message)}</div>` : "");
+      atWrap.append(el);
+    });
+    atLabel.append(atWrap); d.append(atLabel);
+
+    const raw = document.createElement("span"); raw.className = "rawtoggle"; raw.textContent = "show raw JSON";
+    const rawPre = document.createElement("pre"); rawPre.className = "body"; rawPre.style.display = "none";
+    rawPre.textContent = JSON.stringify(t, null, 2);
+    raw.onclick = () => { const open = rawPre.style.display === "none"; rawPre.style.display = open ? "block" : "none"; raw.textContent = open ? "hide raw JSON" : "show raw JSON"; };
+    d.append(raw, rawPre);
+  }
+
+  // View mode for the left pane when not deep-linked to a specific job/trace. "jobs" (default)
+  // lists jobs straight from the jobs table so they are never crowded out by live-call volume;
+  // "all" is the recent-activity tree.
+  let mode = "jobs";
+  let jobsOffset = 0;
+  const JOBS_PAGE = 25;
+
+  function renderHead() {
+    const head = $("#treehead");
+    if (params.get("job")) { head.textContent = "Job"; return; }
+    if (params.get("trace")) { head.textContent = "Recent traces"; return; }
+    const btn = (m, label) => `<button data-mode="${m}" style="background:transparent;border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;color:${mode === m ? "var(--text)" : "var(--muted)"};border-color:${mode === m ? "var(--accent)" : "var(--border)"}">${label}</button>`;
+    head.innerHTML = `<div style="display:flex;gap:6px;align-items:center">${btn("jobs", "Jobs")}${btn("all", "All activity")}</div>`;
+    head.querySelectorAll("button").forEach((b) => (b.onclick = () => { mode = b.dataset.mode; jobsOffset = 0; render(); }));
+  }
+
+  async function loadJobs() {
+    const data = await (await fetch(`/v1/jobs?limit=${JOBS_PAGE}&offset=${jobsOffset}`)).json();
+    const body = $("#treebody"); body.innerHTML = "";
+    if (!data.jobs.length) {
+      body.innerHTML = `<div style="padding:12px 14px;color:var(--muted);font-size:12px">No jobs yet.</div>`;
+      return;
+    }
+    // Pager at the TOP and sticky, so paging controls are visible without scrolling past the
+    // whole page of jobs. Shows the range and total, and pages a full JOBS_PAGE at a time.
+    const from = data.offset + 1, to = data.offset + data.jobs.length;
+    const pager = document.createElement("div");
+    pager.style.cssText = "position:sticky;top:0;z-index:1;background:var(--bg);padding:9px 14px;display:flex;gap:14px;align-items:center;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line)";
+    const link = (label, disabled, fn) => {
+      const a = document.createElement("a"); a.textContent = label;
+      a.style.cssText = `color:var(--accent);text-decoration:none${disabled ? ";opacity:.35;pointer-events:none" : ";cursor:pointer"}`;
+      if (!disabled) a.onclick = fn;
+      return a;
+    };
+    const totalPages = Math.max(1, Math.ceil(data.total / JOBS_PAGE));
+    const curPage = Math.floor(data.offset / JOBS_PAGE) + 1;
+    pager.append(
+      Object.assign(document.createElement("span"), { textContent: `${from}–${to} of ${data.total} jobs` }),
+      link("← prev", data.offset <= 0, () => { jobsOffset = Math.max(0, jobsOffset - JOBS_PAGE); loadJobs(); }),
+      Object.assign(document.createElement("span"), { textContent: `page ${curPage}/${totalPages}` }),
+      link("next →", to >= data.total, () => { jobsOffset += JOBS_PAGE; loadJobs(); }),
+    );
+    body.append(pager);
+
+    for (const j of data.jobs) {
+      const c = j.counts;
+      const bad = c.failed ? ` · <span style="color:var(--bad)">${c.failed} bad</span>` : "";
+      const pend = c.pending ? ` · <span style="color:var(--warn)">${c.pending} pending</span>` : "";
+      const cache = c.served_from_cache ? ` · ${c.served_from_cache} cached` : "";
+      const row = document.createElement("div");
+      row.className = "jobhead"; row.style.cursor = "pointer";
+      row.innerHTML = `<span class="pill muted">job</span> <span class="jid">${esc(short(j.job_id))}</span>` +
+        `<span class="counts">${esc(j.client)}${j.purpose ? " · " + esc(j.purpose) : ""} · ${c.total} calls · ${c.succeeded} ok${bad}${pend}${cache}` +
+        ` · <span title="${esc(absTime(j.submitted_at))}">${relTime(j.submitted_at, true)}</span></span>`;
+      row.onclick = () => { location.search = `?job=${encodeURIComponent(j.job_id)}`; };
+      body.append(row);
+    }
+  }
+
+  function render() {
+    renderHead();
+    // A deep link to a specific job or trace needs the call tree (scoped, or full for detail).
+    if (params.get("job") || params.get("trace") || mode === "all") return loadTree();
+    return loadJobs();
+  }
+
+  async function loadTree() {
+    const expandJob = params.get("job");
+    // A deep link to a specific job shows ONLY that job and its calls — scoped server-side by
+    // job_id — rather than dumping the whole recent tree with one group expanded.
+    const q = expandJob ? `?job=${encodeURIComponent(expandJob)}&limit=500` : "?limit=200";
+    const data = await (await fetch(`/v1/traces${q}`)).json();
+    const rows = data.traces || [];
+    // Group by job_id, preserving recency order (rows come newest-first).
+    const groups = []; const byJob = new Map();
+    for (const r of rows) {
+      if (!r.job_id) { groups.push({ type: "call", row: r }); continue; }
+      if (!byJob.has(r.job_id)) { const g = { type: "job", job_id: r.job_id, client: r.client, purpose: r.purpose, calls: [] }; byJob.set(r.job_id, g); groups.push(g); }
+      byJob.get(r.job_id).calls.push(r);
+    }
+    const body = $("#treebody"); body.innerHTML = "";
+
+    if (expandJob) {
+      const bar = document.createElement("div");
+      bar.style.cssText = "padding:9px 14px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line)";
+      bar.innerHTML = `<a href="/viewer" style="color:var(--accent);text-decoration:none">← all activity</a> · scoped to job <code style="color:var(--text)">${esc(short(expandJob))}</code>`;
+      body.append(bar);
+      if (!rows.length) {
+        const note = document.createElement("div");
+        note.style.cssText = "padding:12px 14px;font-size:12px;color:var(--muted)";
+        note.textContent = "This job has no fresh call rows (its judgments were served from cache — open the batch results for the grades).";
+        body.append(note);
+      }
+    }
+
+    for (const g of groups) {
+      if (g.type === "call") {
+        const row = mkCallRow(g.row); body.append(row);
+      } else {
+        const wrap = document.createElement("div"); wrap.className = "grp";
+        const okc = g.calls.filter((c) => c.status === "succeeded").length;
+        const badc = g.calls.filter((c) => c.status === "failed" || c.status === "exhausted").length;
+        // Rows arrive newest-first, so the group's first call is its most recent activity.
+        const jobTime = g.calls[0]?.submitted_at;
+        const head = document.createElement("div"); head.className = "jobhead";
+        head.innerHTML = `<span class="caret">▶</span><span class="pill muted">job</span> <span class="jid">${esc(short(g.job_id))}</span>` +
+          `<span class="counts">${g.calls.length} calls · ${okc} ok${badc ? ` · ${badc} bad` : ""}` +
+          ` · <span title="${esc(absTime(jobTime))}">${relTime(jobTime, true)}</span></span>`;
+        const callsWrap = document.createElement("div"); callsWrap.className = "calls";
+        g.calls.forEach((c) => callsWrap.append(mkCallRow(c, true)));
+        head.onclick = () => { head.classList.toggle("open"); callsWrap.classList.toggle("open"); };
+        if (expandJob === g.job_id) { head.classList.add("open"); callsWrap.classList.add("open"); }
+        wrap.append(head, callsWrap); body.append(wrap);
+      }
+    }
+
+    const openTrace = params.get("trace");
+    if (openTrace) {
+      const el = [...document.querySelectorAll(".row")].find((r) => r.dataset.id === openTrace);
+      loadDetail(openTrace, el || null);
+    }
+  }
+
+  // Compact provider path for the tree — a fallback shows as gemini→openrouter, failed hops
+  // dimmed, so the list never hides that the call moved across providers.
+  function providerPath(r) {
+    const path = r.provider_path || [];
+    if (path.length <= 1) return esc(r.provider_id || (path[0] ? path[0].provider : ""));
+    return path.map((a) => {
+      const style = a.status === "succeeded" ? "" : "opacity:.5;text-decoration:line-through";
+      return `<span style="${style}" title="${esc(a.status)}">${esc(a.provider)}</span>`;
+    }).join("→");
+  }
+
+  function mkCallRow(r, inJob = false) {
+    const row = document.createElement("div"); row.className = "row"; row.dataset.id = r.trace_id;
+    row.innerHTML = `${inJob ? "" : `<span class="pill ${r.priority_class === "call" ? "ok" : "muted"}">${r.priority_class}</span>`}` +
+      `<span class="id">${esc(short(r.trace_id))}</span>` +
+      `<span class="meta"><span class="pill ${statusCls(r.status)}">${esc(r.status)}</span> ${providerPath(r)}` +
+      ` <span title="${esc(absTime(r.submitted_at))}" style="opacity:.7">${relTime(r.submitted_at, true)}</span></span>`;
+    row.onclick = () => loadDetail(r.trace_id, row);
+    return row;
+  }
+
+  render();
+  setInterval(() => { if (!params.get("trace") && !params.get("job")) render(); }, 5000);
+</script>

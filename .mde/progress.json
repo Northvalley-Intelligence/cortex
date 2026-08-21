@@ -1,0 +1,20 @@
+{
+  "project_id": "cortex",
+  "updated_at": "2026-07-16",
+  "current_generation": "GEN-001",
+  "completed": [
+    "Generation 0: mission clarification, project-specific validation strategy, 22-BDD inventory, risk register, task graph.",
+    "Confirmed Critical Ollama silent-truncation finding by probe (evidence + reproducible script).",
+    "Implemented the full service (zero-dep Node + node:sqlite): queue, providers, executor, trace, metrics, API, worker, relevance/NDCG, dashboard.",
+    "67-test BDD scenario suite; Validation Gate passed twice with real Ollama enforced.",
+    "Live end-to-end against real providers, including a real Gemini quota-exhaustion fallback.",
+    "Independent third-person caller review; two HIGH boundary bugs found and fixed + covered.",
+    "HANDOFF.md for both consuming projects (no cross-repo writes)."
+  ],
+  "in_progress": [],
+  "next": [
+    "Ferosh: answer OQ-1..OQ-6.",
+    "Ferosh: trigger Command Center + evaluation-reports retrofits from their own sessions.",
+    "Register retail-search in the central portfolio; promote LOCAL_MODEL_SILENT_PROMPT_TRUNCATION to central."
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "validation_run_id": "VAL-002",
+  "project_id": "cortex",
+  "generation_id": "GEN-002",
+  "run_at": "2026-07-17",
+  "strategy_version": "VALSTRAT-002",
+  "gate": "phase-exit",
+  "result": "pass",
+  "pass_count": 2,
+  "scope": "Completed the two partial in-scope features flagged in the mission-coverage review: per-provider concurrency (MISSION.md:30) and dashboard quota status (MISSION.md:34).",
+  "new_tests": "test/concurrency.test.mjs (6 tests). Total suite now 73 tests, 8 gate categories.",
+  "evidence": {
+    "per_provider_concurrency": "Observable proof via a tracking fake: cloud-primary calls peaked at >=2 simultaneous while local-primary never exceeded 1; a saturated provider is skipped (priority preserved) not leased-then-requeued. Local stays one-at-a-time (MISSION.md:30).",
+    "quota_status": "Derived from each provider's most recent quota-shaped failure. Live server showed openrouter=exhausted (free-models-per-day), gemini=recovered, local=ok. isQuotaExhaustion excludes non-quota availability failures (transport, 500)."
+  },
+  "gate_passes": [
+    {"pass":1,"categories":8,"tests":73,"failed":0},
+    {"pass":2,"categories":8,"tests":73,"failed":0,"note":"no code changes since pass 1; real Ollama enforced"}
+  ],
+  "critical_findings": [],
+  "high_findings": []
+}

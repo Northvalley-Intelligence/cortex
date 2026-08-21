@@ -1,0 +1,134 @@
+<title>Cortex — Settings</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3;
+    --muted: #8b949e; --accent: #58a6ff; --ok: #3fb950; --warn: #d29922; --bad: #f85149;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  header { padding: 18px 24px; border-bottom: 1px solid var(--border); display: flex;
+    align-items: baseline; gap: 14px; }
+  header h1 { margin: 0; font-size: 18px; letter-spacing: .5px; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  header .nav { margin-left: auto; display: flex; gap: 18px; font-size: 13px; }
+  main { padding: 20px 24px; max-width: 1100px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 28px 0 12px; }
+  a { color: var(--accent); text-decoration: none; }
+  code { font-family: var(--mono); color: var(--accent); }
+  .lead { color: var(--muted); font-size: 13px; margin: 0 0 14px; max-width: 720px; }
+  .storage { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px;
+    display: flex; align-items: center; gap: 26px; flex-wrap: wrap; }
+  .storage .stat { font-size: 13px; } .storage .stat b { font-size: 18px; font-variant-numeric: tabular-nums; }
+  .storage .stat .k { color: var(--muted); font-size: 12px; display: block; }
+  .storage .actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  .storage button { background: #0f141a; color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+  .storage button:hover { border-color: var(--muted); }
+  .storage button:disabled { opacity: .4; cursor: default; }
+  .storage button.danger { color: var(--bad); border-color: rgba(248,81,73,.4); }
+  .storage button.confirm { background: rgba(248,81,73,.15); color: var(--bad); border-color: var(--bad); }
+  .storage .note { color: var(--muted); font-size: 12px; width: 100%; margin-top: 4px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; margin-bottom: 10px; }
+  .card .row { display: flex; justify-content: space-between; gap: 20px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .card .row:last-child { border-bottom: none; }
+  .card .row .k { color: var(--muted); }
+  .foot { color: var(--muted); font-size: 12px; margin-top: 22px; }
+</style>
+
+<header>
+  <h1>CORTEX</h1>
+  <span class="sub">settings &amp; maintenance</span>
+  <span class="nav">
+    <a href="/">← dashboard</a>
+    <a href="/viewer">trace viewer →</a>
+  </span>
+</header>
+
+<main>
+  <h2>Trace store</h2>
+  <p class="lead">Every prompt and output is kept for full traceability, so the store grows over time.
+    Pruning removes only <b>finished traces</b> (in-flight work is always kept) and reclaims disk on the database
+    file. This does <b>not</b> touch the judgment cache. Irreversible.</p>
+  <div id="tracestore" class="storage">loading&hellip;</div>
+
+  <h2>Judgment cache</h2>
+  <p class="lead">Deterministic relevance judgments are served from a prior run instead of re-calling the model.
+    Clearing only forces those judgments to <b>re-run</b> next time — it costs a little latency, not data. This
+    does <b>not</b> delete any traces. Irreversible.</p>
+  <div id="cachestore" class="storage">loading&hellip;</div>
+
+  <h2>Provider chain</h2>
+  <div class="card" id="providers">loading&hellip;</div>
+
+  <div class="foot" id="foot"></div>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const fmtBytes = (b) => b == null ? "n/a" : b > 1e6 ? (b / 1e6).toFixed(1) + " MB" : b > 1e3 ? (b / 1e3).toFixed(0) + " KB" : b + " B";
+  const ago = (t) => { if (!t) return "—"; const h = (Date.now() - t) / 3.6e6; return h < 1 ? Math.round(h * 60) + "m" : h < 24 ? h.toFixed(0) + "h" : (h / 24).toFixed(0) + "d"; };
+
+  const stat = (k, v, suffix = "") => `<div class="stat"><span class="k">${k}</span><b>${v}</b>${suffix}</div>`;
+
+  async function refreshStorage() {
+    let s; try { s = await fetch("/v1/admin/storage").then((r) => r.json()); } catch { return; }
+    const cache = s.judgment_cache || {};
+
+    // TRACE STORE — prune finished traces only. Nothing here touches the cache.
+    $("tracestore").innerHTML =
+      stat("size on disk", fmtBytes(s.db_bytes)) +
+      stat("calls", (s.calls ?? 0).toLocaleString()) +
+      stat("attempts", (s.attempts ?? 0).toLocaleString()) +
+      stat("jobs", (s.jobs ?? 0).toLocaleString()) +
+      stat("oldest", ago(s.oldest_at), " ago") +
+      stat("in flight (kept)", s.in_flight ?? 0) +
+      `<div class="actions">` +
+      actionBtn("prune older than 7d", s.prunable["7d"], "/v1/admin/prune", { older_than_days: 7 }) +
+      actionBtn("prune older than 30d", s.prunable["30d"], "/v1/admin/prune", { older_than_days: 30 }) +
+      actionBtn("prune all terminal", s.prunable.all, "/v1/admin/prune", { all: true }) +
+      `</div>`;
+
+    // JUDGMENT CACHE — clear only. Nothing here deletes a trace.
+    // Point-in-time facts only. "Hits this window" is windowed ACTIVITY and lives on the
+    // dashboard; showing an "all-time hits" here would be misleading, since a per-entry hit
+    // count vanishes when the entry is cleared or pruned.
+    $("cachestore").innerHTML =
+      stat("cached judgments", (cache.entries ?? 0).toLocaleString()) +
+      stat("size on disk", fmtBytes(cache.est_bytes)) +
+      `<div class="actions">` +
+      actionBtn("clear cache", cache.entries ?? 0, "/v1/admin/cache/clear", {}) +
+      `</div>`;
+  }
+
+  // Generic two-step-confirm action button (no native dialog). Each button targets its own
+  // endpoint, so trace pruning and cache clearing are genuinely separate actions, not one
+  // control with a flag. First click arms; second click posts to `endpoint`.
+  function actionBtn(label, count, endpoint, body) {
+    const id = "ab_" + label.replace(/\W/g, "");
+    setTimeout(() => {
+      const b = document.getElementById(id); if (!b) return;
+      let armed = false;
+      b.onclick = async () => {
+        if (!armed) { armed = true; b.textContent = `confirm — ${label}?`; b.classList.add("confirm"); setTimeout(() => { if (armed) { armed = false; b.textContent = label + (count != null ? ` (${count})` : ""); b.classList.remove("confirm"); } }, 4000); return; }
+        b.textContent = "working…"; b.disabled = true;
+        try { await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }).then((x) => x.json()); refreshStorage(); }
+        catch { b.textContent = "failed"; }
+      };
+    }, 0);
+    return `<button id="${id}" class="danger" ${count === 0 ? "disabled" : ""}>${label}${count != null ? ` (${count})` : ""}</button>`;
+  }
+
+  async function refreshProviders() {
+    let h; try { h = await fetch("/v1/health").then((r) => r.json()); } catch { return; }
+    $("providers").innerHTML = h.providers.map((p) =>
+      `<div class="row"><span class="k"><code>${p.id}</code> ${p.model}</span>` +
+      `<span>${p.ok ? '<span style="color:var(--ok)">available</span>' : `<span style="color:var(--bad)">unavailable</span> <span style="color:var(--muted)">${p.reason || ""}</span>`}</span></div>`
+    ).join("");
+  }
+
+  function tick() { refreshStorage(); refreshProviders(); $("foot").textContent = "Updated " + new Date().toLocaleTimeString(); }
+  tick();
+  setInterval(tick, 10000);
+</script>
