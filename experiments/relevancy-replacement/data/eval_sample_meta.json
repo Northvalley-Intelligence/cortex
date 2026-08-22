@@ -1,0 +1,50 @@
+{
+  "esci": {
+    "source": "esci_test.jsonl",
+    "n_source_rows": 181701,
+    "seed": 42,
+    "target_n": 3000,
+    "n_sample": 3000,
+    "source_grade_distribution": {
+      "0": 30331,
+      "1": 8099,
+      "2": 63563,
+      "3": 79708
+    },
+    "quotas": {
+      "0": 501,
+      "1": 134,
+      "2": 1049,
+      "3": 1316
+    },
+    "sample_grade_distribution": {
+      "0": 501,
+      "1": 134,
+      "2": 1049,
+      "3": 1316
+    }
+  },
+  "wands": {
+    "source": "wands_eval.jsonl",
+    "n_source_rows": 233448,
+    "seed": 42,
+    "target_n": 3000,
+    "n_sample": 3000,
+    "source_grade_distribution": {
+      "0": 61201,
+      "2": 146633,
+      "3": 25614
+    },
+    "quotas": {
+      "0": 787,
+      "2": 1884,
+      "3": 329
+    },
+    "sample_grade_distribution": {
+      "0": 787,
+      "2": 1884,
+      "3": 329
+    }
+  },
+  "method": "proportional stratified by gold grade, largest-remainder rounding, seeded (mulberry32, seed=42) sampling without replacement, then a seeded re-shuffle"
+}

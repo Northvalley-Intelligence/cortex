@@ -1,0 +1,36 @@
+{
+  "arm": "bm25",
+  "dataset": "esci_eval_sample",
+  "n_pairs": 3000,
+  "timestamp": "2026-08-22T21:08:34.560Z",
+  "qwk": 0.22203848466626563,
+  "qwk_ci95": {
+    "low": 0.18319068804558813,
+    "high": 0.2561596107266906,
+    "resamples": 1000
+  },
+  "accuracy": 0.40066666666666667,
+  "off_by_one_accuracy": 0.7493333333333333,
+  "mae": 0.9523333333333334,
+  "ndcg": {
+    "mean_ndcg": 0.8377027578794725,
+    "queries": 2502
+  },
+  "speed": {
+    "warm": {
+      "n": 2999,
+      "median_ms": 0.0025,
+      "p95_ms": 0.004958
+    },
+    "cold": {
+      "n": 1,
+      "median_ms": 0.10825,
+      "p95_ms": 0.10825
+    }
+  },
+  "peak_rss_bytes": 111230976,
+  "extra": {
+    "dataset_file": "esci_eval_sample.jsonl",
+    "n_source_rows": 3000
+  }
+}

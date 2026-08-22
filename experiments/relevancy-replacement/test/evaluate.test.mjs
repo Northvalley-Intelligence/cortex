@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   quadraticWeightedKappa,
+  qwkFromConfusion,
   exactAccuracy,
   offByOneAccuracy,
   meanAbsoluteError,
@@ -64,6 +65,28 @@ test("speedStats separates warm and cold and computes median/p95", () => {
   assert.equal(stats.warm.n, 3);
   assert.equal(stats.cold.n, 1);
   assert.equal(stats.cold.median_ms, 5000);
+});
+
+test("qwkFromConfusion agrees with quadraticWeightedKappa on the same data (Arm A calibration path)", () => {
+  const gold = [0, 1, 2, 3, 0, 2, 1, 3, 0, 0, 3, 2, 1, 1, 2, 3];
+  const pred = [0, 1, 1, 3, 1, 2, 0, 2, 0, 1, 3, 2, 2, 1, 2, 0];
+  const fromArrays = quadraticWeightedKappa(gold, pred);
+
+  const confusion = Array.from({ length: 4 }, () => new Array(4).fill(0));
+  for (let i = 0; i < gold.length; i++) confusion[gold[i]][pred[i]]++;
+  const fromConfusion = qwkFromConfusion(confusion);
+
+  assert.ok(Math.abs(fromArrays - fromConfusion) < 1e-12, `${fromArrays} vs ${fromConfusion}`);
+});
+
+test("qwkFromConfusion is 1 for a perfect-agreement confusion matrix", () => {
+  const confusion = [
+    [5, 0, 0, 0],
+    [0, 3, 0, 0],
+    [0, 0, 4, 0],
+    [0, 0, 0, 2],
+  ];
+  assert.equal(qwkFromConfusion(confusion), 1);
 });
 
 test("evaluateArm produces all required fields", () => {

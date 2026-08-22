@@ -84,6 +84,45 @@ export function bootstrapQwkCI(gold, pred, { resamples = 1000, seed = 42 } = {})
   return { low: scores[lowIdx] ?? null, high: scores[highIdx] ?? null, resamples };
 }
 
+/**
+ * QWK computed directly from a confusion matrix (confusion[goldIdx][predIdx], 0-indexed by
+ * grade - minGrade), rather than from raw (gold,pred) arrays. Same formula as
+ * quadraticWeightedKappa above -- added for Arm A's BM25 threshold calibration (handoff 01),
+ * which needs to score ~150k candidate threshold triples against ESCI-train and cannot afford
+ * an O(n) pass per candidate; a histogram/prefix-sum confusion matrix makes each candidate O(1).
+ * Cross-checked in test/evaluate.test.mjs against quadraticWeightedKappa on the same data.
+ */
+export function qwkFromConfusion(confusion, minGrade = Math.min(...VALID_GRADES), maxGrade = Math.max(...VALID_GRADES)) {
+  const n = maxGrade - minGrade + 1;
+  const goldHist = new Array(n).fill(0);
+  const predHist = new Array(n).fill(0);
+  let total = 0;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const c = confusion[i][j];
+      goldHist[i] += c;
+      predHist[j] += c;
+      total += c;
+    }
+  }
+  if (total === 0) return null;
+
+  const weights = Array.from({ length: n }, (_, i) => new Array(n).fill(0).map((_, j) => ((i - j) ** 2) / ((n - 1) ** 2 || 1)));
+
+  let numerator = 0;
+  let denominator = 0;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const observed = confusion[i][j] / total;
+      const expected = (goldHist[i] * predHist[j]) / (total * total);
+      numerator += weights[i][j] * observed;
+      denominator += weights[i][j] * expected;
+    }
+  }
+  if (denominator === 0) return numerator === 0 ? 1 : 0;
+  return 1 - numerator / denominator;
+}
+
 export function exactAccuracy(gold, pred) {
   if (gold.length === 0) return null;
   let hits = 0;

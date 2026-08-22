@@ -1,0 +1,36 @@
+{
+  "arm": "bm25",
+  "dataset": "cortex_validations",
+  "n_pairs": 4576,
+  "timestamp": "2026-08-22T21:08:30.475Z",
+  "qwk": 0.41393223941544044,
+  "qwk_ci95": {
+    "low": 0.3944653274290877,
+    "high": 0.43515796931483164,
+    "resamples": 1000
+  },
+  "accuracy": 0.35598776223776224,
+  "off_by_one_accuracy": 0.8037587412587412,
+  "mae": 0.857736013986014,
+  "ndcg": {
+    "mean_ndcg": 0.89783613585005,
+    "queries": 402
+  },
+  "speed": {
+    "warm": {
+      "n": 4575,
+      "median_ms": 0.001,
+      "p95_ms": 0.003917
+    },
+    "cold": {
+      "n": 1,
+      "median_ms": 0.107,
+      "p95_ms": 0.107
+    }
+  },
+  "peak_rss_bytes": 111738880,
+  "extra": {
+    "dataset_file": "cortex_validations.jsonl",
+    "n_source_rows": 4576
+  }
+}

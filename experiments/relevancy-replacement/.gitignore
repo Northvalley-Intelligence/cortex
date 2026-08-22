@@ -1,5 +1,8 @@
 .venv/
 data/raw/
 data/*.jsonl
+data/cortex_local_scratch_*.db*
+logs/
 __pycache__/
 *.pyc
+results/*.superseded-*.json

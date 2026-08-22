@@ -1,0 +1,36 @@
+{
+  "arm": "bm25",
+  "dataset": "wands_eval_sample",
+  "n_pairs": 3000,
+  "timestamp": "2026-08-22T21:08:34.672Z",
+  "qwk": 0.15478498916391015,
+  "qwk_ci95": {
+    "low": 0.12780286612373692,
+    "high": 0.1840371206468493,
+    "resamples": 1000
+  },
+  "accuracy": 0.37733333333333335,
+  "off_by_one_accuracy": 0.7106666666666667,
+  "mae": 0.9596666666666667,
+  "ndcg": {
+    "mean_ndcg": 0.8486032426498415,
+    "queries": 414
+  },
+  "speed": {
+    "warm": {
+      "n": 2999,
+      "median_ms": 0.001166,
+      "p95_ms": 0.00275
+    },
+    "cold": {
+      "n": 1,
+      "median_ms": 0.101875,
+      "p95_ms": 0.101875
+    }
+  },
+  "peak_rss_bytes": 113000448,
+  "extra": {
+    "dataset_file": "wands_eval_sample.jsonl",
+    "n_source_rows": 3000
+  }
+}

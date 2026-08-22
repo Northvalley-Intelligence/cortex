@@ -1,0 +1,21 @@
+{
+  "thresholds": [
+    1.3668118626944543,
+    4.5088630031851284,
+    11.638501691942055
+  ],
+  "rule": "grade 0 if score<=t0; 1 if score<=t1; 2 if score<=t2; else 3",
+  "calibration_qwk": 0.2126091062740989,
+  "recheck_qwk": 0.21258708420615413,
+  "method": "quantile-binned grid search (100 equal-count bins over ESCI-train BM25 scores, grid search over all C(99,3) bin-boundary triples, argmax QWK computed via a confusion-matrix prefix-sum, per calibrate_bm25.mjs)",
+  "calibrated_on": "esci_train.jsonl (ESCI-train only, no eval-set leakage)",
+  "n_train_rows": 419653,
+  "bin_count": 100,
+  "corpus_n_titles": 348277,
+  "corpus_vocab_size": 177031,
+  "bin_cuts": [
+    20,
+    26,
+    60
+  ]
+}
