@@ -1,0 +1,50 @@
+{
+  "arm": "mlx_lora",
+  "dataset": "wands_eval_sample",
+  "n_pairs": 3000,
+  "timestamp": "2026-08-23T14:26:06.028Z",
+  "qwk": 0.48581207208344857,
+  "qwk_ci95": {
+    "low": 0.453481258159938,
+    "high": 0.5174215624972309,
+    "resamples": 1000
+  },
+  "accuracy": 0.6026666666666667,
+  "off_by_one_accuracy": 0.8156666666666667,
+  "mae": 0.6033333333333334,
+  "ndcg": {
+    "mean_ndcg": 0.883606712756563,
+    "queries": 414
+  },
+  "speed": {
+    "warm": {
+      "n": 2999,
+      "median_ms": 360.20684242248535,
+      "p95_ms": 1432.046890258789
+    },
+    "cold": {
+      "n": 1,
+      "median_ms": 214.2941951751709,
+      "p95_ms": 214.2941951751709
+    }
+  },
+  "peak_rss_bytes": 2672427008,
+  "extra": {
+    "dataset_file": "wands_eval_sample.jsonl",
+    "n_source_rows": 3000,
+    "model": "mlx-community/Llama-3.2-3B-Instruct-4bit + LoRA adapter (models/llama32-3b-lora-esci)",
+    "adapter_used": true,
+    "model_load_s": 5.799558162689209,
+    "total_elapsed_s": 1529.9502329826355,
+    "parse_failure_count": 0,
+    "parse_failure_rate": 0,
+    "parse_failure_note": "not applicable -- argmax over the 4 label-digit token logits at one forward-pass position, no free-generation or text parsing",
+    "label_logits_sample_first_pair": [
+      24.734375,
+      25.15625,
+      23.359375,
+      23.625
+    ],
+    "rss_source": "python subprocess resource.getrusage(RUSAGE_SELF).ru_maxrss (real process, not the Node harness process)"
+  }
+}
