@@ -1,0 +1,43 @@
+{
+  "arm": "bge_reranker",
+  "dataset": "esci_eval_sample",
+  "n_pairs": 3000,
+  "timestamp": "2026-08-23T03:21:09.790Z",
+  "qwk": 0.3599590373783923,
+  "qwk_ci95": {
+    "low": 0.32471495862990596,
+    "high": 0.39124220319978764,
+    "resamples": 1000
+  },
+  "accuracy": 0.517,
+  "off_by_one_accuracy": 0.7543333333333333,
+  "mae": 0.818,
+  "ndcg": {
+    "mean_ndcg": 0.8397171176493713,
+    "queries": 2502
+  },
+  "speed": {
+    "warm": {
+      "n": 2999,
+      "median_ms": 27.871131896972656,
+      "p95_ms": 40.06600379943848
+    },
+    "cold": {
+      "n": 1,
+      "median_ms": 249.81403350830078,
+      "p95_ms": 249.81403350830078
+    }
+  },
+  "peak_rss_bytes": 1062830080,
+  "extra": {
+    "dataset_file": "esci_eval_sample.jsonl",
+    "n_source_rows": 3000,
+    "model": "BAAI/bge-reranker-v2-m3 (fine-tuned on ESCI, models/bge-esci)",
+    "model_load_s": 2.0894179344177246,
+    "total_elapsed_s": 89.6948630809784,
+    "parse_failure_count": 0,
+    "parse_failure_rate": 0,
+    "parse_failure_note": "not applicable -- argmax over a 4-way classification head, no free-text parsing",
+    "rss_source": "python subprocess resource.getrusage(RUSAGE_SELF).ru_maxrss (real process, not the Node harness process)"
+  }
+}

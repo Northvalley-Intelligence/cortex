@@ -1,0 +1,36 @@
+{
+  "source": "esci_train.jsonl",
+  "source_split_note": "esci_train.jsonl is the ESCI-native query-disjoint TRAIN split (journal 02); esci_test.jsonl / esci_eval_sample.jsonl / wands_eval_sample.jsonl / cortex_validations_sample.jsonl are never read by this script.",
+  "seed": 42,
+  "per_grade_quota": 10000,
+  "n_source_rows": 419653,
+  "source_grade_distribution": {
+    "0": 71116,
+    "1": 19090,
+    "2": 147628,
+    "3": 181819
+  },
+  "quotas": {
+    "0": 10000,
+    "1": 10000,
+    "2": 10000,
+    "3": 10000
+  },
+  "n_picked": 40000,
+  "dev_fraction": 0.1,
+  "n_train": 36000,
+  "n_dev": 4000,
+  "train_grade_distribution": {
+    "0": 9014,
+    "1": 8961,
+    "2": 9018,
+    "3": 9007
+  },
+  "dev_grade_distribution": {
+    "0": 986,
+    "1": 1039,
+    "2": 982,
+    "3": 993
+  },
+  "method": "balanced stratified by gold grade (equal quota per grade, capped at availability), seeded (mulberry32, seed=42) sampling without replacement + seeded shuffle, then a seeded 90/10 train/dev split (dev used ONLY for early-stopping, never for reported eval metrics)"
+}
