@@ -1,0 +1,126 @@
+{
+  "arm": "ollama_prompt",
+  "dataset": "wands_eval_sample",
+  "n_pairs": 2989,
+  "timestamp": "2026-08-23T00:12:10.301Z",
+  "qwk": 0.24382632735815757,
+  "qwk_ci95": {
+    "low": 0.2171552486996795,
+    "high": 0.2705874291196272,
+    "resamples": 1000
+  },
+  "accuracy": 0.31047172967547676,
+  "off_by_one_accuracy": 0.8986283037805286,
+  "mae": 0.7919036467045835,
+  "ndcg": {
+    "mean_ndcg": 0.8675450260179723,
+    "queries": 413
+  },
+  "speed": {
+    "warm": {
+      "n": 2988,
+      "median_ms": 5150.336083,
+      "p95_ms": 6126.314583
+    },
+    "cold": {
+      "n": 1,
+      "median_ms": 3895.123083,
+      "p95_ms": 3895.123083
+    }
+  },
+  "peak_rss_bytes": null,
+  "extra": {
+    "dataset_file": "wands_eval_sample.jsonl",
+    "n_source_rows": 3000,
+    "n_attempted": 3000,
+    "n_parsed": 2989,
+    "parse_failure_count": 11,
+    "parse_failure_rate": 0.0036666666666666666,
+    "parse_failures_sample": [
+      {
+        "index": 86,
+        "query": "writing desk 48\"",
+        "title": "rachida writing desk",
+        "gold_grade": 2,
+        "error": "judge response was not valid JSON: Expected ',' or '}' after property value in JSON at position 41 (line 1 column 42)"
+      },
+      {
+        "index": 711,
+        "query": "smart coffee table",
+        "title": "rickardsville block coffee table with storage",
+        "gold_grade": 2,
+        "error": "judge response was not valid JSON: Expected ',' or '}' after property value in JSON at position 66 (line 1 column 67)"
+      },
+      {
+        "index": 718,
+        "query": "upholstered girls bed",
+        "title": "mindenmines tufted upholstered low profile standard bed",
+        "gold_grade": 2,
+        "error": "judge response was not valid JSON: Expected ',' or '}' after property value in JSON at position 109 (line 1 column 110)"
+      },
+      {
+        "index": 953,
+        "query": "tufted chair with gold legs",
+        "title": "goldbug 32 '' wide tufted top grain leather swivel lounge chair",
+        "gold_grade": 2,
+        "error": "judge response was not valid JSON: Expected ',' or '}' after property value in JSON at position 58 (line 1 column 59)"
+      },
+      {
+        "index": 1194,
+        "query": "fold in half table",
+        "title": "24.82 '' rectangular fold-in-half adjustable folding table",
+        "gold_grade": 3,
+        "error": "judge response was not valid JSON: Expected ',' or '}' after property value in JSON at position 99 (line 1 column 100)"
+      },
+      {
+        "index": 1363,
+        "query": "upholstered girls bed",
+        "title": "albi tufted upholstered low profile storage platform bed",
+        "gold_grade": 2,
+        "error": "judge response was not valid JSON: Expected ',' or '}' after property value in JSON at position 107 (line 1 column 108)"
+      },
+      {
+        "index": 1494,
+        "query": "unique coffee tables",
+        "title": "adilia solid wood coffee table with storage",
+        "gold_grade": 2,
+        "error": "judge response was not valid JSON: Expected ',' or '}' after property value in JSON at position 67 (line 1 column 68)"
+      },
+      {
+        "index": 1613,
+        "query": "writing desk 48\"",
+        "title": "gympie writing desk",
+        "gold_grade": 2,
+        "error": "judge response was not valid JSON: Expected ',' or '}' after property value in JSON at position 41 (line 1 column 42)"
+      },
+      {
+        "index": 1954,
+        "query": "westling coffee table",
+        "title": "belger solid wood coffee table with storage",
+        "gold_grade": 2,
+        "error": "judge response was not valid JSON: Expected ',' or '}' after property value in JSON at position 69 (line 1 column 70)"
+      },
+      {
+        "index": 2011,
+        "query": "48\" sliding single track , barn door for laundry",
+        "title": "track sliding barn door hardware",
+        "gold_grade": 2,
+        "error": "judge response was not valid JSON: Expected ',' or '}' after property value in JSON at position 125 (line 1 column 126)"
+      },
+      {
+        "index": 2126,
+        "query": "smart coffee table",
+        "title": "rossitano solid wood coffee table with storage",
+        "gold_grade": 2,
+        "error": "judge response was not valid JSON: Expected ',' or '}' after property value in JSON at position 66 (line 1 column 67)"
+      }
+    ],
+    "model": "llama3.2:3b",
+    "forced_cold_unload": true,
+    "concurrency": 4,
+    "total_elapsed_s": 3888.666999999999,
+    "effective_throughput_pairs_per_sec": 0.7714725894503183,
+    "run_in_chunks": true,
+    "rss_caveat": "peak_rss_bytes is null: this dataset was run across multiple separate chunked node processes (see docstring), so no single process RSS represents the whole run. Ollama itself (a separate process) holds the model weights (~5-6GB RSS per `ollama ps`), not measured here."
+  }
+}

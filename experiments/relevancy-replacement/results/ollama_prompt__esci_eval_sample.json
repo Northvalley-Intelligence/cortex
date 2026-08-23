@@ -1,0 +1,98 @@
+{
+  "arm": "ollama_prompt",
+  "dataset": "esci_eval_sample",
+  "n_pairs": 2993,
+  "timestamp": "2026-08-22T23:06:17.947Z",
+  "qwk": 0.28823258580143596,
+  "qwk_ci95": {
+    "low": 0.2579483026109606,
+    "high": 0.3202993910131281,
+    "resamples": 1000
+  },
+  "accuracy": 0.31673905780153694,
+  "off_by_one_accuracy": 0.7728032074841297,
+  "mae": 0.9488807216839291,
+  "ndcg": {
+    "mean_ndcg": 0.8397863778442523,
+    "queries": 2497
+  },
+  "speed": {
+    "warm": {
+      "n": 2992,
+      "median_ms": 5439.873084,
+      "p95_ms": 6402.284125
+    },
+    "cold": {
+      "n": 1,
+      "median_ms": 3801.822958,
+      "p95_ms": 3801.822958
+    }
+  },
+  "peak_rss_bytes": null,
+  "extra": {
+    "dataset_file": "esci_eval_sample.jsonl",
+    "n_source_rows": 3000,
+    "n_attempted": 3000,
+    "n_parsed": 2993,
+    "parse_failure_count": 7,
+    "parse_failure_rate": 0.0023333333333333335,
+    "parse_failures_sample": [
+      {
+        "index": 144,
+        "query": "4” marine corps military mediallon",
+        "title": "Marine Corps Metal Medallion - Red Military Memorial Medallion - Engraving Sold Separately",
+        "gold_grade": 3,
+        "error": "judge response was not valid JSON: Expected ',' or '}' after property value in JSON at position 40 (line 1 column 41)"
+      },
+      {
+        "index": 272,
+        "query": "all boots",
+        "title": "Timberland Men's Whiteledge Hiker Boot,Wheat,11 M US",
+        "gold_grade": 3,
+        "error": "judge response was not valid JSON: Expected ',' or '}' after property value in JSON at position 46 (line 1 column 47)"
+      },
+      {
+        "index": 557,
+        "query": "path projects running shorts",
+        "title": "adidas Girls' Big 5\" Mesh Althletic Short, Adi Black, Large",
+        "gold_grade": 3,
+        "error": "judge response was not valid JSON: Expected ',' or '}' after property value in JSON at position 40 (line 1 column 41)"
+      },
+      {
+        "index": 1104,
+        "query": "ak rail mount",
+        "title": "UTG Steel Side Rail",
+        "gold_grade": 1,
+        "error": "judge response was not valid JSON: Expected ',' or '}' after property value in JSON at position 66 (line 1 column 67)"
+      },
+      {
+        "index": 1499,
+        "query": "can't resist me shirt",
+        "title": "Electrician You Can't Resist Me - Funny Electrical Engineer T-Shirt",
+        "gold_grade": 3,
+        "error": "judge response was not valid JSON: Bad escaped character in JSON at position 39 (line 1 column 40)"
+      },
+      {
+        "index": 2373,
+        "query": "40\" electric fireplace insert",
+        "title": "Masarflame 43'' Electric Fireplace Insert, Retro Recessed Fireplace Heater with Fire Cracking Sound, Remote Control & Timer, 750/1500W, Black",
+        "gold_grade": 2,
+        "error": "judge response was not valid JSON: Expected ',' or '}' after property value in JSON at position 41 (line 1 column 42)"
+      },
+      {
+        "index": 2889,
+        "query": "4\" muffler tip",
+        "title": "3 Inlet Black Exhaust Tip, OsoTorero Universal 3\" x 4\" x 12\" Replacement Exhaust Tips for Truck Car Bolt On Tailpipes 3 Inch Inlet 4\" Outlet 12\" Long",
+        "gold_grade": 2,
+        "error": "judge response was not valid JSON: Expected ',' or '}' after property value in JSON at position 40 (line 1 column 41)"
+      }
+    ],
+    "model": "llama3.2:3b",
+    "forced_cold_unload": true,
+    "concurrency": 4,
+    "total_elapsed_s": 4103.322,
+    "effective_throughput_pairs_per_sec": 0.7311149356545745,
+    "run_in_chunks": true,
+    "rss_caveat": "peak_rss_bytes is null: this dataset was run across multiple separate chunked node processes (see docstring), so no single process RSS represents the whole run. Ollama itself (a separate process) holds the model weights (~5-6GB RSS per `ollama ps`), not measured here."
+  }
+}

@@ -6,3 +6,4 @@ logs/
 __pycache__/
 *.pyc
 results/*.superseded-*.json
+results/.checkpoints/
