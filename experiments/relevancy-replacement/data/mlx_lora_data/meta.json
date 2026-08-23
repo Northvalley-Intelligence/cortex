@@ -1,0 +1,14 @@
+{
+  "source_train": "data/bge_train_subset.jsonl (same balanced ESCI subset as Arm C -- journal 06)",
+  "source_valid": "data/bge_dev_subset.jsonl",
+  "n_train": 36000,
+  "n_valid": 4000,
+  "label_tokens": [
+    "0",
+    "1",
+    "2",
+    "3"
+  ],
+  "format": "mlx_lm CompletionsDataset: {\"prompt\":..., \"completion\":...}, one grade digit per completion, trained with --mask-prompt so loss is only on the completion + eos token",
+  "prompt_template_file": "prompt_template.txt (placeholders __QUERY__/__TITLE__; mlx_infer.py reads this file verbatim -- see src/mlxPrompt.mjs)"
+}

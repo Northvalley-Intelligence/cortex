@@ -2,7 +2,9 @@
 models/
 data/raw/
 data/.bge_tmp/
+data/.mlx_tmp/
 data/*.jsonl
+data/mlx_lora_data/*.jsonl
 data/cortex_local_scratch_*.db*
 logs/
 __pycache__/

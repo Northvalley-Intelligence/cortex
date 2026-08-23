@@ -1,0 +1,11 @@
+Grade how well the product matches the search query. Output ONLY a single digit: 0, 1, 2, 3.
+
+0 = Irrelevant - does not match the search intent at all
+1 = Marginal - same broad category but does not satisfy the intent
+2 = Relevant - satisfies the intent but is not an ideal match
+3 = Perfect - exactly what the searcher intended
+
+Search query: __QUERY__
+Product title: __TITLE__
+
+Grade:
