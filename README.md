@@ -30,3 +30,11 @@ See `HANDOFF.md` for the full contract and per-caller retrofit guidance. Core en
 Zero runtime dependencies — Node's built-in `node:sqlite` and `node:http`. Durable queue and
 trace store in SQLite (leases survive machine sleep). Provider chain configurable via
 `CORTEX_PROVIDER_CHAIN`. MDE project state is in `.mde/`.
+
+## Experiments
+
+- [`experiments/relevancy-replacement/`](experiments/relevancy-replacement/) — **CPU vs GPU
+  Battle, Round 1**: can a laptop grade e-commerce search relevance on a 0–3 scale, and when is
+  the GPU worth it? Four arms (BM25, a prompted local LLM, a fine-tuned bge cross-encoder, and a
+  LoRA-tuned generative model) with an honest, reproducible scorecard. Written up in the
+  [CPU vs GPU Battle](https://feroshjacob.github.io/series/cpu-vs-gpu-battle/) series.
