@@ -40,6 +40,24 @@ generalization (WANDS) at a latency cost.
   hosted Gemini model), which was **not** benchmarked and would likely beat every laptop-bound
   arm here. The win is "no API, runs on this machine," not "beats GPT/Gemini."
 
+## How it runs (where the GPU code actually is)
+
+The JavaScript is orchestration, not model code. `scripts/run_arm.mjs` and the `arms/*.mjs`
+modules are one evaluation harness that runs every arm through the identical pipeline and
+metrics, so the four are directly comparable. The GPU work lives in **Python**:
+
+- **Arm C — bge** — `scripts/train_bge.py` and `scripts/bge_infer.py`, in **PyTorch** on the
+  Apple GPU via the **MPS (Metal)** backend (`CrossEncoder(model_dir, device="mps")`).
+- **Arm D — LoRA** — `scripts/mlx_infer.py`, via **`mlx_lm`** (Apple's **MLX** framework), also on Metal.
+- **Arm B — prompted LLM** — `arms/ollama_prompt.mjs` calls **Ollama**, which runs `llama3.2:3b`
+  on the GPU as well. (Only **Arm A, BM25**, is genuinely CPU-only.)
+
+Each JS arm `spawn`s its Python script as a subprocess, passes the pairs, and reads the grades
+back. Note what is **not** here: no hand-written CUDA or Metal kernels. The GPU is driven entirely
+through PyTorch, MLX, and Ollama, which handle device dispatch — the kernel-level tuning that used
+to be done by hand is now absorbed by the frameworks. The "GPU" throughout is the **Apple M-series
+integrated GPU** (Metal), not a discrete card.
+
 ## Layout
 
 - `00`–`08` — the lab journals, in order (contract, metrics/mapping, data + harness, the
