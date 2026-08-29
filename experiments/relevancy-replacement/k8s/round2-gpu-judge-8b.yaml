@@ -34,14 +34,28 @@ spec:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
+            # Any non-quota-gated >=24GB card fits Qwen2.5-7B (fp16 ~15GB) with room for the
+            # KV cache at max_model_len 4096. A6000s were all busy, so select from a broad
+            # pool of plentiful 24-48GB cards instead of pinning one product. (A100/H100/H200/
+            # GH200 are deliberately excluded: quota-gated and advertised under custom resource
+            # names, not the generic nvidia.com/gpu this Job requests.)
             - matchExpressions:
               - key: nvidia.com/gpu.product
                 operator: In
                 values:
-                - NVIDIA-RTX-A6000
-      # A6000 (48GB) nodes on NRP carry the large-gpu hardware taint; tolerate it so the
-      # full A6000 pool is schedulable. This is a hardware taint, NOT preemption — the pod
-      # is still non-preemptible (no opportunistic priorityClass).
+                - NVIDIA-GeForce-RTX-3090   # 24GB, dozens free
+                - NVIDIA-A10                 # 24GB, dozens free
+                - NVIDIA-RTX-A5000           # 24GB
+                - NVIDIA-GeForce-RTX-4090    # 24GB
+                - NVIDIA-TITAN-RTX           # 24GB
+                - Quadro-RTX-6000            # 24GB
+                - NVIDIA-L40                 # 48GB
+                - NVIDIA-L40S                # 48GB
+                - NVIDIA-A40                 # 48GB
+                - NVIDIA-RTX-A6000           # 48GB
+      # Some 48GB nodes (A6000/A40/L40) carry the large-gpu hardware taint; tolerate it so
+      # they stay in the pool. This is a hardware taint, NOT preemption — the pod is still
+      # non-preemptible (no opportunistic priorityClass). Harmless on the 24GB cards.
       tolerations:
       - key: nautilus.io/hardware
         operator: Equal
