@@ -63,15 +63,16 @@ spec:
         - name: VLLM_WORKER_MULTIPROC_METHOD
           value: spawn
         resources:
+          # NRP policy: limit must be <= 1.2x request for cpu/memory/ephemeral-storage.
           requests:
-            cpu: "2"
-            memory: 16Gi
-            ephemeral-storage: 30Gi
+            cpu: "7"
+            memory: 28Gi
+            ephemeral-storage: 50Gi
             nvidia.com/gpu: "1"
           limits:
-            cpu: "8"
-            memory: 32Gi
-            ephemeral-storage: 60Gi
+            cpu: "8"                  # 8/7   = 1.14 <= 1.2
+            memory: 32Gi             # 32/28 = 1.14 <= 1.2
+            ephemeral-storage: 60Gi  # 60/50 = 1.20 <= 1.2
             nvidia.com/gpu: "1"
         volumeMounts:
         - name: code
