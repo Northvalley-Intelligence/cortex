@@ -39,6 +39,14 @@ spec:
                 operator: In
                 values:
                 - NVIDIA-RTX-A6000
+      # A6000 (48GB) nodes on NRP carry the large-gpu hardware taint; tolerate it so the
+      # full A6000 pool is schedulable. This is a hardware taint, NOT preemption — the pod
+      # is still non-preemptible (no opportunistic priorityClass).
+      tolerations:
+      - key: nautilus.io/hardware
+        operator: Equal
+        value: large-gpu
+        effect: NoSchedule
       containers:
       - name: judge
         image: vllm/vllm-openai:latest
@@ -63,16 +71,19 @@ spec:
         - name: VLLM_WORKER_MULTIPROC_METHOD
           value: spawn
         resources:
-          # NRP policy: limit must be <= 1.2x request for cpu/memory/ephemeral-storage.
+          # requests == limits (ratio 1.0, satisfies NRP's <=1.2x rule) and kept MODEST so the
+          # pod fits alongside other tenants on a shared A6000 node (7-CPU request was causing
+          # "Insufficient cpu" on otherwise-free A6000s). A single 7B vLLM run needs little host
+          # CPU/RAM — the weights live in the 48GB GPU.
           requests:
-            cpu: "7"
-            memory: 28Gi
-            ephemeral-storage: 50Gi
+            cpu: "3"
+            memory: 20Gi
+            ephemeral-storage: 40Gi
             nvidia.com/gpu: "1"
           limits:
-            cpu: "8"                  # 8/7   = 1.14 <= 1.2
-            memory: 32Gi             # 32/28 = 1.14 <= 1.2
-            ephemeral-storage: 60Gi  # 60/50 = 1.20 <= 1.2
+            cpu: "3"
+            memory: 20Gi
+            ephemeral-storage: 40Gi
             nvidia.com/gpu: "1"
         volumeMounts:
         - name: code
