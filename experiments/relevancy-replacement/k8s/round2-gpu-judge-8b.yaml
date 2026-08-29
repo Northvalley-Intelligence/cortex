@@ -1,0 +1,97 @@
+# Round-2 "bigger-GPU arm" — prompted LLM-as-judge on a real NVIDIA GPU (NRP/Nautilus).
+#
+# Answers Round 1's open question: is the ~0.3–0.5 QWK ceiling the TASK or the MODEL SIZE?
+# Method held constant vs Round-1 Arm B (arms/ollama_prompt.mjs) — same judge prompt, same
+# parser, same held-out eval sets, same QWK formula — only the model + hardware change.
+#
+# Model: Qwen/Qwen2.5-7B-Instruct (OPEN, ungated). Preferred Llama-3.1-8B-Instruct is gated
+#   and no HF_TOKEN was available in the worker env, so this is the fallback. CONFOUND noted in
+#   the journal: this changes model FAMILY as well as size vs Arm B's Llama-3.2-3B.
+# GPU: 1× NVIDIA RTX A6000 (48 GB) — non-quota-gated, non-preemptible (no opportunistic
+#   priorityClassName), within the 2-GPU non-preemptible limit. 48 GB fits 7B fp16 with room
+#   to spare (also headroom for a later 14B arm).
+# Data + code staged via ConfigMaps (round2-data = gzipped eval jsonl; round2-code =
+#   gpu_judge.py + the byte-identical composed system prompt). Results → stdout logs
+#   (RESULTS_JSON_BEGIN/END markers), collected with `kubectl logs`.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: round2-gpu-judge-8b
+  namespace: kennesaw-state-fjacob
+  labels:
+    app: cortex-round2-gpu-arm
+spec:
+  backoffLimit: 0            # do not retry a GPU run automatically
+  activeDeadlineSeconds: 7200  # 90 min is plenty; hard cap so the job never sits idle
+  ttlSecondsAfterFinished: 172800  # keep the finished pod/logs 48h for collection
+  template:
+    metadata:
+      labels:
+        app: cortex-round2-gpu-arm
+    spec:
+      restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nvidia.com/gpu.product
+                operator: In
+                values:
+                - NVIDIA-RTX-A6000
+      containers:
+      - name: judge
+        image: vllm/vllm-openai:latest
+        command: ["python3"]
+        args:
+        - /code/gpu_judge.py
+        - --model
+        - Qwen/Qwen2.5-7B-Instruct
+        - --system-prompt
+        - /code/round2_system_prompt.txt
+        - --dataset
+        - esci=/data/esci_eval_sample.jsonl.gz
+        - --dataset
+        - wands=/data/wands_eval_sample.jsonl.gz
+        - --max-model-len
+        - "4096"
+        env:
+        - name: HF_HOME
+          value: /workspace/hf
+        - name: HF_HUB_ENABLE_HF_TRANSFER
+          value: "0"
+        - name: VLLM_WORKER_MULTIPROC_METHOD
+          value: spawn
+        resources:
+          requests:
+            cpu: "2"
+            memory: 16Gi
+            ephemeral-storage: 30Gi
+            nvidia.com/gpu: "1"
+          limits:
+            cpu: "8"
+            memory: 32Gi
+            ephemeral-storage: 60Gi
+            nvidia.com/gpu: "1"
+        volumeMounts:
+        - name: code
+          mountPath: /code
+        - name: data
+          mountPath: /data
+        - name: workspace
+          mountPath: /workspace
+        - name: dshm
+          mountPath: /dev/shm
+      volumes:
+      - name: code
+        configMap:
+          name: round2-code
+      - name: data
+        configMap:
+          name: round2-data
+      - name: workspace
+        emptyDir: {}
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 8Gi
