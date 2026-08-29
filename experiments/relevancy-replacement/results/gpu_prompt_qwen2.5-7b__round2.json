@@ -1,0 +1,141 @@
+{
+  "round": 2,
+  "arm": "gpu_prompt",
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "hardware": "NVIDIA GPU (NRP/Nautilus) via vLLM chat",
+  "method": "prompted LLM-as-judge, SAME prompt+parser+QWK as Round-1 Arm B",
+  "model_load_secs": 103.8,
+  "datasets": {
+    "esci": {
+      "dataset_file": "esci_eval_sample.jsonl.gz",
+      "n_source_rows": 3000,
+      "n_attempted": 3000,
+      "n_parsed": 2997,
+      "parse_failure_count": 3,
+      "parse_failure_rate": 0.001,
+      "qwk": 0.3609456862599262,
+      "qwk_ci95": {
+        "low": 0.3332102839976112,
+        "high": 0.3889573076237365,
+        "resamples": 1000,
+        "method": "python-random-bootstrap"
+      },
+      "accuracy": 0.34300967634300966,
+      "off_by_one_accuracy": 0.7887887887887888,
+      "mae": 0.9062395729062396,
+      "pred_grade_distribution": {
+        "0": 486,
+        "1": 902,
+        "2": 1130,
+        "3": 479
+      },
+      "confusion_gold_by_pred": [
+        [
+          220,
+          186,
+          86,
+          9
+        ],
+        [
+          22,
+          48,
+          50,
+          14
+        ],
+        [
+          139,
+          388,
+          412,
+          108
+        ],
+        [
+          105,
+          280,
+          582,
+          348
+        ]
+      ],
+      "gen_wall_secs": 127.7,
+      "pairs_per_sec": 23.5,
+      "parse_failures_sample": [
+        {
+          "index": 925,
+          "query": "cream and sugar",
+          "title": "Creamer and Sugar Bowl Set Stainless Steel Latte Milk Cup Cream Jug and Sugar Bowl with Lid Spoon Tray for Coffee Serving Set Frothing Milk",
+          "gold_grade": 3,
+          "error": "judge response was not valid JSON: Expecting ',' delimiter: line 1 column 79 (char 78)",
+          "raw": "{\"grade\": 2, \"reason\": \"Matches the items mentioned but not the exact phrase \"cream and sugar\".\"}"
+        },
+        {
+          "index": 1437,
+          "query": "18\" chair cushions for dining room",
+          "title": "Klear Vu Omega Universal Tufted Extra Large No Slip Dining Chair Pads, 17\"x 17\" x 3\", 2 Pack, Indigo 2 Count",
+          "gold_grade": 2,
+          "error": "judge response was not valid JSON: Expecting ',' delimiter: line 1 column 50 (char 49)",
+          "raw": "{\"grade\": 1, \"reason\": \"Close but wrong size; 17\"x17\" is not 18\\\".\"}"
+        },
+        {
+          "index": 2373,
+          "query": "40\" electric fireplace insert",
+          "title": "Masarflame 43'' Electric Fireplace Insert, Retro Recessed Fireplace Heater with Fire Cracking Sound, Remote Control & Timer, 750/1500W, Black",
+          "gold_grade": 2,
+          "error": "judge response was not valid JSON: Expecting property name enclosed in double quotes: line 1 column 77 (char 76)",
+          "raw": "{\"grade\": 2, \"reason\": \"Close match but incorrect size; query asks for 40\", while product is 43''.\"}"
+        }
+      ]
+    },
+    "wands": {
+      "dataset_file": "wands_eval_sample.jsonl.gz",
+      "n_source_rows": 3000,
+      "n_attempted": 3000,
+      "n_parsed": 3000,
+      "parse_failure_count": 0,
+      "parse_failure_rate": 0.0,
+      "qwk": 0.3536674657225102,
+      "qwk_ci95": {
+        "low": 0.32627723778193585,
+        "high": 0.3823965506024273,
+        "resamples": 1000,
+        "method": "python-random-bootstrap"
+      },
+      "accuracy": 0.33166666666666667,
+      "off_by_one_accuracy": 0.872,
+      "mae": 0.8006666666666666,
+      "pred_grade_distribution": {
+        "0": 422,
+        "1": 1469,
+        "2": 961,
+        "3": 148
+      },
+      "confusion_gold_by_pred": [
+        [
+          215,
+          458,
+          113,
+          1
+        ],
+        [
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          195,
+          948,
+          687,
+          54
+        ],
+        [
+          12,
+          63,
+          161,
+          93
+        ]
+      ],
+      "gen_wall_secs": 91.5,
+      "pairs_per_sec": 32.8,
+      "parse_failures_sample": []
+    }
+  }
+}

@@ -62,42 +62,82 @@ kubectl apply -f k8s/round2-gpu-judge-8b.yaml
 kubectl -n kennesaw-state-fjacob logs -f job/round2-gpu-judge-8b
 ```
 
-## STATUS — BLOCKED at submission (namespace profile gate)
+## STATUS — RAN (job `round2-gpu-judge-8b` Succeeded)
 
-Everything is built, validated, and staged; the ConfigMaps exist on the cluster and the
-manifest is schema-valid (`kubectl apply --dry-run=client` passes). `kubectl apply` of the
-Job is **denied by NRP's admission webhook**:
+The namespace-profile gate (description/institution/publications/software at nrp.ai) was
+cleared by Ferosh, then three scheduling fixes got the pod onto a GPU:
+1. **NRP resource-ratio policy** — limit must be ≤ 1.2× request for cpu/mem/ephemeral. Set
+   requests == limits (cpu 3 / mem 20Gi / ephemeral 40Gi).
+2. **large-gpu taint** — 48GB cards carry `nautilus.io/hardware: large-gpu`; added the
+   toleration (hardware, not preemption — still non-preemptible).
+3. **GPU pool too narrow** — every A6000 was allocated (`Insufficient nvidia.com/gpu`).
+   Qwen2.5-7B (fp16 ~15GB) fits any ≥24GB card, so the nodeAffinity was widened to a pool of
+   non-quota-gated 24–48GB products (RTX-3090/A10/A5000/4090/TITAN-RTX/RTX-6000/L40/L40S/A40/
+   A6000; A100/H100/H200/GH200 excluded — quota-gated, custom resource name). It scheduled
+   immediately (RTX-3090/A10 alone had dozens of free GPUs) onto `k8s-gen4-05.calit2`.
 
-> admission webhook "job.nrp-nautilus.io" denied the request: TO RESOLVE THE ISSUE:
-> Please ask your namespace admin add **description, institution, publications and
-> software** at https://nrp.ai/namespaces
+Run: model load 103.8 s, then greedy generation at **23.5 pairs/s (ESCI)** / **32.8 pairs/s
+(WANDS)** — 3000 pairs each in ~2 min per set. Raw results:
+`results/gpu_prompt_qwen2.5-7b__round2.json`.
 
-This is a **namespace-profile requirement**, not a defect in the job. The worker has
-namespace-scoped admin (can create jobs/configmaps/pvc) but **cannot patch the `Namespace`
-object** (`kubectl auth can-i patch namespaces` → **no**; it is cluster-scoped), so the
-fields cannot be set from `kubectl`. They are filled by the namespace admin on the NRP web
-portal. → **Ferosh action** (see `waiting_on`). Once the profile is completed, the single
-`kubectl apply` above launches the run with no further changes.
+## Results — Qwen2.5-7B prompted, on GPU, beside the Round-1 table
 
-## Results — 8B (and 14B if run) beside the Round-1 table
+Held-out QWK (independent labels), computed by the identical formula as Round 1.
 
-Held-out QWK (independent labels). **PENDING** — fills in when the job runs.
-
-| arm | ESCI QWK | WANDS QWK | ESCI acc | WANDS acc | parse fails | notes |
+| arm | ESCI QWK | WANDS QWK | ESCI acc | WANDS acc | parse fails (esci/wands) | notes |
 |---|---|---|---|---|---|---|
 | BM25 (A, R1) | 0.222 | 0.155 | 0.401 | 0.377 | — | lexical floor |
 | **llama3.2:3b prompted (B, R1)** | 0.288 | 0.244 | 0.317 | 0.310 | 7 / 5 | the 3B baseline this arm scales up |
 | bge fine-tuned (C, R1) | 0.360 | 0.299 | 0.517 | 0.473 | — | in-domain + latency winner |
-| LoRA llama-3.2-3B (D, R1) | 0.353 | 0.486 | 0.483 | 0.603 | — | out-of-domain winner |
-| **Qwen2.5-7B prompted (R2, GPU)** | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | family confound vs B |
-| Qwen2.5-14B prompted (R2, opt.) | — | — | — | — | — | only if 7B moves the ceiling |
+| LoRA llama-3.2-3B (D, R1) | 0.353 | **0.486** | 0.483 | 0.603 | — | out-of-domain winner |
+| **Qwen2.5-7B prompted (R2, GPU)** | **0.361** | 0.354 | 0.343 | 0.332 | 3 / 0 | this run; family confound vs B |
+| Qwen2.5-14B prompted (R2, opt.) | not run | not run | — | — | — | ceiling did not move enough to justify (see below) |
 
-### Honest read — TO BE WRITTEN when numbers land
-- Did the bigger prompted model **break** the ~0.3–0.5 ceiling, or just nudge it? The
-  reference bar is **Arm B** (same method, smaller model): a large jump over 0.288/0.244
-  argues "model size," a small one argues "the task is hard regardless of size."
-- **Where it lost / will be logged:** parse-failure count (recorded, never coerced),
-  generation wall-time + pairs/sec on the A6000 vs Arm B's ~1–5 s/pair on Metal, and any
-  Round-1 arm it does **not** beat (esp. the fine-tuned C/D, which a *prompted* judge may
-  still trail even at 7–14B — that would itself be the finding).
-- Family confound (Qwen vs Llama) stays flagged until the Llama-3.1-8B re-run.
+Qwen2.5-7B 95% CI: ESCI [0.333, 0.389], WANDS [0.326, 0.382]. Off-by-one accuracy 0.79
+(ESCI) / 0.87 (WANDS); MAE 0.91 / 0.80.
+
+### Honest read — did the bigger prompted model break the ceiling? NO.
+
+**The ceiling is the TASK, not the model size.** A 2.3× bigger, stronger prompted judge
+(3B → 7B) landed at **~0.35 QWK on both sets** — squarely inside the same ~0.3–0.5 band
+every Round-1 arm occupied. It did not break out of it. Pointwise relevance grading against
+independent human labels is genuinely hard, and throwing a bigger prompted model at it does
+not change that. So the answer to Round 1's open question is settled on the prompted axis:
+size helps *within* the band, but the band itself is the task.
+
+**Where scaling DID help (real, but bounded):** vs Arm B (same method, 3B) QWK rose
++0.073 on ESCI (0.288→0.361) and +0.110 on WANDS (0.244→0.354). With **no fine-tuning**, the
+prompted 7B now:
+- **ties bge on ESCI** (0.361 vs 0.360) and **beats bge on WANDS** (0.354 vs 0.299) — i.e. a
+  prompted model matches a fine-tuned cross-encoder in-domain and generalizes better than it
+  out-of-domain, which is a genuinely useful "no training required" result.
+
+**Where it LOST (honest):**
+- **Loses to the LoRA (D) out-of-domain on WANDS: 0.354 vs 0.486.** The fine-tuned generative
+  arm still clearly wins generalization; the bigger prompted judge did NOT catch it. This is
+  the sharpest loss and the clearest sign the ceiling didn't move: the best Round-1 number
+  (0.486) still stands untouched.
+- **Loses on EXACT accuracy to both fine-tunes:** 0.343/0.332 vs bge 0.517/0.473 and LoRA
+  0.483/0.603. Its QWK is respectable only because its errors are ordinally *close*
+  (off-by-one ~0.79/0.87) — it rarely nails the exact grade. The prediction distribution
+  shows it hugging the middle: it under-predicts grade 3 (479/2997 on ESCI, 148/3000 on
+  WANDS) and over-uses 1–2, so it agrees on *rank* far better than on *label*.
+- **Deployment cost:** needs a ≥24GB datacenter GPU and a ~104 s model load; throughput is
+  high (23–33 pairs/s batched) but bge does ~28 ms/pair on ~1 GB. For a shipping on-device
+  judge bge still wins the efficiency tradeoff by a wide margin.
+- **Parse failures: 3 on ESCI (recorded as FAILURES, never coerced to 0), 0 on WANDS.** All
+  three are the same failure mode — the model emitted literal unescaped `"` inside the JSON
+  `reason` string (an inch mark `40"`, or quoting the query `"cream and sugar"`), breaking
+  `JSON.parse`. A prompted judge writing free-text reasons occasionally produces invalid JSON;
+  Cortex's parser correctly rejects it rather than inventing a grade.
+
+**14B: not run, on purpose.** The plan said go bigger only if 8B moved the ceiling clearly.
+It didn't — 7B landed on the same ~0.35 plateau as the 3B fine-tunes, and the 3B→7B trend is
+already inside the band with diminishing returns. A 14B (or 70B) prompted judge would very
+likely stay in the same band at more cost, so spending it is not justified by this evidence.
+The manifest is one `--model` change away if Ferosh wants the datapoint anyway.
+
+**Confound (still open):** the fallback used **Qwen2.5-7B**, not the preferred
+Llama-3.1-8B (gated, no `HF_TOKEN`). So the +0.07/+0.11 over Arm B mixes model *family* with
+*size*. A clean same-family 3B→8B size ablation needs Llama-3.1-8B — worth one more run if a
+token appears, though it is unlikely to change the headline (the ceiling held for a strong 7B).
