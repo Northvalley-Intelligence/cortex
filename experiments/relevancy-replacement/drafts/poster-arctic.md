@@ -1,80 +1,74 @@
 <!--
 ================================================================================
-DRAFT POSTER FOR FEROSH'S REVIEW — DO NOT SUBMIT / DO NOT PUBLISH AS-IS.
+ARCTIC / SCD 2026 RESEARCH POSTER — FINAL CONTENT (approved to submit).
 
-This is a research-poster DRAFT for the ARCTIC "Scientific Computing Day" (SCD 2026)
-symposium at Georgia State University, covering the WHOLE "CPU vs GPU Battle —
-search relevance" project now that the external-datacenter-GPU (Round 2) results
-are in. It reports the losses next to the wins, per this project's contract.
+Covers the whole "CPU vs GPU Battle — search relevance" project including the
+external-datacenter-GPU (Round 2) result. It reports the losses next to the wins,
+per this project's contract.
 
-EVERY number below is cited to a repo journal or a results/*.json file. No number
-is invented. Where a number is a rounded/summary figure, the exact source value is
-given in parentheses. Sources live at experiments/relevancy-replacement/ on:
+EVERY number below is cited to a repo journal or a results/*.json file, and was
+re-verified against those files on finalization (2026-08-31). No number is invented.
+Where a number is a rounded/summary figure, the exact source value is given in
+parentheses. Sources live at experiments/relevancy-replacement/ on:
   - branch `main` / `experiment/relevancy-replacement`: journals 00-08, README,
     and all Round-1 results/*.json (bm25, ollama_prompt, bge_reranker, mlx_lora).
   - branch `round2-gpu-arm`: journal `09-round2-gpu-arm.md` and
     `results/gpu_prompt_qwen2.5-7b__round2.json` (Round-2 / external GPU).
-  (This poster branch, cortex-poster-arctic, is cut off main and carries ONLY this
-   file — the Round-2 sources are on round2-gpu-arm, not yet merged to main.)
+  (This poster branch carries the poster file; the Round-2 sources are on
+   round2-gpu-arm, not yet merged to main.)
 
---------------------------------------------------------------------------------
-SUBMISSION METADATA — ARCTIC / SCD 2026 (fetched 2026-08-29 from
-  https://arctic.gsu.edu/create-a-submission/). Structure the CMT submission to these:
-  - Host / event: ARCTIC (Advanced Research Computing Technology, Innovation &
-    Collaboration), Georgia State University — "Scientific Computing Day" symposium.
-  - Poster max dimensions: 36" x 48".
-  - Required CMT fields: Principal Investigator (PI) name; list of ALL contributing
-    authors; affiliated College and Department; subject area (option to add a 2nd).
-  - Abstract must emphasize: computational methods used, significant results,
-    scientific merits and impact. No explicit word/character limit is stated.
-  - Submission platform: Microsoft CMT — cmt3.research.microsoft.com/scd2026.
-  - DEADLINE: September 3rd, 2026.
-  - Optional: accepted posters may submit PowerPoint slides by Sept 17 for a
-    separate 5-minute lightning talk (email per the site).
-
-[NEEDS FEROSH — SUBMISSION ELIGIBILITY / AFFILIATION]:
-  ARCTIC/SCD is a *Georgia State University* symposium and its affiliation field is
-  GSU-college/department oriented (welcomes GSU's research community: grad students,
-  postdocs, faculty). BUT this project's NRP/Nautilus GPU namespace is
-  `kennesaw-state-fjacob` (Kennesaw State University) — see journal 09. This is a
-  submission-eligibility question: under WHICH institution / affiliation should this
-  be submitted (GSU college & department vs. Kennesaw State), and is a GSU
-  affiliation required to submit to SCD at all? Please confirm before anything is
-  entered into CMT.
-
-[NEEDS FEROSH — the remaining CMT fields I could not fill from the repo]:
-  - PI name (Ferosh Jacob assumed as author; confirm PI == author or name a separate PI).
-  - Full author list (co-authors, if any).
-  - Affiliated College and Department (blocked on the eligibility question above).
-  - Primary subject area + optional second area (e.g. "Machine Learning / NLP" +
-    "Information Retrieval" — confirm against CMT's actual subject-area menu).
+REMAINING PRODUCTION STEP (not a content blocker): this is the poster's text +
+structure. The uploadable poster is a 36" x 48" designed PDF built from this
+content (LaTeX/beamer-poster or a designer pass) — see "Poster file to upload"
+in the CMT fields below and Figure 1 in Section 2.4.
 ================================================================================
 -->
 
-# POSTER TITLE
+# CMT SUBMISSION FIELDS — ARCTIC / SCD 2026 (paste into cmt3.research.microsoft.com/scd2026)
 
-## The CPU-vs-GPU Battle for Search Relevance: Where the ~0.3–0.5 Quality Ceiling Is the *Task*, Not the *Model Size*
+> Reference (fetched 2026-08-29 from https://arctic.gsu.edu/create-a-submission/):
+> ARCTIC (Advanced Research Computing Technology, Innovation & Collaboration) hosts
+> the "Scientific Computing Day" (SCD) symposium at Georgia State University.
+> Poster max size **36" x 48"**. Platform **Microsoft CMT**. **Deadline: Sept 3, 2026.**
+> Optional: accepted posters may email PowerPoint slides by **Sept 17** for a
+> 5-minute lightning talk. Abstract should emphasize computational methods,
+> significant results, and scientific merit/impact (no stated word limit).
+
+| CMT field | Value to enter |
+|---|---|
+| **Title** | The CPU-vs-GPU Battle for Search Relevance: The ~0.3–0.5 Quality Ceiling Is the Task, Not the Model Size |
+| **Principal Investigator (PI)** | Ferosh Jacob (presenter / submitter) |
+| **All contributing authors** | Ferosh Jacob; Jiho Noh |
+| **Affiliation** | Department of Computer Science, Kennesaw State University |
+| **College** | College of Computing and Software Engineering (KSU home of the CS department — confirm exact CMT wording) |
+| **Department** | Computer Science |
+| **Primary subject area** | Machine Learning / Natural Language Processing (or nearest CMT menu equivalent) |
+| **Secondary subject area (optional)** | Information Retrieval / Search |
+| **Abstract** | Paste the Abstract section below (≈200 words). |
+| **Poster file to upload** | TODO — the 36"x48" designed poster PDF built from this content (LaTeX/beamer-poster or designer pass). Not yet produced; this markdown is the approved content source. |
+
+*Note: PI vs. author — Ferosh Jacob is entered as PI + presenter/submitter and Jiho
+Noh as co-author. If CMT requires a PI distinct from the author list, keep Ferosh Jacob
+as PI.*
+
+---
+
+# The CPU-vs-GPU Battle for Search Relevance: Where the ~0.3–0.5 Quality Ceiling Is the *Task*, Not the *Model Size*
 ### An honest, reproducible benchmark of six relevance-grading judges across CPU, a laptop GPU (Apple Metal), and a datacenter GPU (NRP/Nautilus)
-
-*(Alternate short title for the CMT title field: "CPU vs GPU: The Quality Ceiling in
-On-Device Search-Relevance Grading Is the Task, Not the Model Size.")*
 
 ---
 
 ## Authors & Affiliation
 
-- **Author / Presenter:** Ferosh Jacob
-- **PI:** [NEEDS FEROSH — confirm PI; Ferosh Jacob assumed]
-- **Affiliated College & Department:** [NEEDS FEROSH — see eligibility note above; GSU
-  college/department vs. Kennesaw State (`kennesaw-state-fjacob` NRP namespace)]
-- **Contact / affiliation:** Northvalley Intelligence — ferosh@northvalleyintel.com
-  [NEEDS FEROSH — confirm which affiliation ARCTIC/SCD expects on the poster]
+- **Ferosh Jacob and Jiho Noh** — Department of Computer Science, Kennesaw State University.
+- **Presenter / PI:** Ferosh Jacob.
+- **Contact:** ferosh@northvalleyintel.com
 
 ---
 
 ## Abstract
-*(≈200 words; ARCTIC states no hard limit but asks the abstract to emphasize
-computational methods, significant results, and scientific merit/impact.)*
+*(≈200 words; ARCTIC asks the abstract to emphasize computational methods,
+significant results, and scientific merit/impact.)*
 
 E-commerce search engines must grade how well each product matches a query on an
 ordinal 0–3 scale (0 Irrelevant · 1 Marginal · 2 Relevant · 3 Perfect). We ask an
@@ -170,7 +164,13 @@ Every arm runs through the identical pipeline so the six are directly comparable
     failures are recorded as **failures and excluded from QWK — never coerced to 0**
     (contract rule). (`09`.)
 
-### 2.4 [ ARCHITECTURE DIAGRAM — POSTER VISUAL CENTERPIECE — place here, large ]
+### 2.4 Figure 1 — architecture diagram (poster visual centerpiece — TO BE PRODUCED)
+> **Status:** the poster's designed centerpiece diagram is a production TODO — it is
+> specified below for the designer/LaTeX pass, not drawn here (no diagram is fabricated).
+> An existing project figure (`images/cpu-vs-gpu-battle-part-2.png`, the CPU-vs-GPU
+> battle motif from Part 2 of the article series) can serve as an interim/visual-motif
+> asset, but the poster ideally wants the pipeline diagram described here.
+>
 > **What the diagram must show:** ONE evaluation pipeline fanning across THREE
 > hardware tiers, all converging on the same QWK scorecard. Left to right:
 >
@@ -217,8 +217,8 @@ in the source note. Compare arms WITHIN a dataset only — see limitation L2.)*
 *Exact QWK values: A 0.22204 / 0.15478 · B 0.28823 / 0.24383 · C 0.35996 / 0.29928 ·
 D 0.35275 / 0.48581 · R2 0.36095 / 0.35367.*
 *Test sets: 3,000 pairs each. Arm B parsed 2,993 (ESCI) / 2,989 (WANDS) — 7 / 11 parse
-failures excluded, never coerced. R2 parsed 2,997 (ESCI) / 3,000 (WANDS) — 3 / 0 parse
-failures. (`02`, `08-final-comparison.md`, `09`; results files.)*
+failures excluded, never coerced (per the results files). R2 parsed 2,997 (ESCI) /
+3,000 (WANDS) — 3 / 0 parse failures. (`02`, `08-final-comparison.md`, `09`; results files.)*
 
 ### 3.2 The Round-2 result, read against Round 1 (the scientific payload)
 - **Scaling the prompted judge 3B→7B on a datacenter GPU lifted QWK — but stayed in
@@ -305,7 +305,7 @@ returns inside the band, so spending more GPU was not justified (`09`).
   not the preferred **Llama-3.1-8B** (gated, no `HF_TOKEN`), so the +0.073/+0.110 over
   Arm B mixes model *family* with *size*. A clean same-family 3B→8B ablation is still
   open (needs an `HF_TOKEN`) — though the ceiling held for a strong 7B, so it is
-  unlikely to change the headline (`09`). *(This is a `waiting_on` item for Ferosh.)*
+  unlikely to change the headline (`09`).
 - **L6 — Latency methodologies differ across arms** (bge batch=1 serial; B
   concurrency-4; D serial logit-read; R2 vLLM batched). Even normalized, the ordering
   (bge ≪ LoRA ≪ prompted) holds (`06`, `08`).
@@ -337,11 +337,10 @@ correction. Repo: `experiments/relevancy-replacement/` (Round-2 sources on branc
 `round2-gpu-arm`).
 
 <!--
-FEROSH — quick checklist before this becomes a real poster:
-  [ ] Answer the eligibility/affiliation question (GSU vs Kennesaw State) — blocks CMT.
-  [ ] Confirm PI, author list, college/department, subject area(s).
-  [ ] Commission the architecture diagram (Section 2.4) as the visual centerpiece.
-  [ ] Decide: mention the still-open Llama-3.1-8B clean-ablation as "future work" (L5)?
-  [ ] This is a text/structure DRAFT — it is NOT laid out to 36"x48"; a designer
-      pass (or a LaTeX/beamer-poster template) is the next step, not part of this draft.
+PRODUCTION CHECKLIST (content is final; these are layout/design steps):
+  [ ] Build the 36"x48" poster PDF from this content (LaTeX/beamer-poster or designer).
+  [ ] Produce Figure 1 (Section 2.4) as the visual centerpiece; interim motif asset
+      available at images/cpu-vs-gpu-battle-part-2.png.
+  [ ] Upload that PDF to CMT (cmt3.research.microsoft.com/scd2026) with the fields at top.
+  [ ] Optional: email PowerPoint slides by Sept 17 if the poster is accepted (lightning talk).
 -->
