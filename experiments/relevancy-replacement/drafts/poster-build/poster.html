@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The CPU-vs-GPU Battle for Search Relevance</title>
+<style>
+  :root{
+    --ink:#12212e;          /* near-black body */
+    --muted:#4a5b68;
+    --line:#c9d4dc;
+    --navy:#0b3d6b;         /* header / headings */
+    --navy2:#12558f;
+    --cpu:#5b6b78;          /* CPU tier = slate */
+    --lap:#0e7c86;          /* Laptop GPU (Apple Metal) = teal */
+    --dc:#c9531a;           /* Datacenter GPU (NVIDIA) = orange */
+    --lapbg:#e5f4f5;
+    --dcbg:#fbe9df;
+    --cpubg:#eceff1;
+    --band:#fff3d6;         /* 0.3-0.5 ceiling band */
+    --bandln:#e0a83a;
+    --hi:#fff6cc;           /* best-number highlight */
+    --panel:#ffffff;
+    --pagebg:#ffffff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  @page{ size:36in 48in; margin:0; }
+  body{
+    width:36in; height:48in;
+    background:var(--pagebg);
+    color:var(--ink);
+    font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-size:22pt; line-height:1.3;
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{ width:36in; height:48in; padding:0.9in; }
+
+  /* ---------- Header ---------- */
+  header{
+    background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 100%);
+    color:#fff; border-radius:22pt; padding:28pt 44pt 24pt;
+    box-shadow:0 6pt 0 rgba(11,61,107,.18);
+  }
+  .venue{ font-size:21pt; letter-spacing:2pt; text-transform:uppercase;
+    color:#bfe0ff; font-weight:700; margin-bottom:8pt;}
+  h1.title{ font-size:55pt; line-height:1.06; margin:0 0 6pt; font-weight:800;
+    letter-spacing:-.5pt;}
+  h1.title .em{ color:#ffd166; }
+  .subtitle{ font-size:26pt; font-weight:400; color:#e7f1fb; margin:5pt 0 16pt;}
+  .authorline{ display:flex; justify-content:space-between; align-items:flex-end;
+    border-top:2pt solid rgba(255,255,255,.28); padding-top:14pt; gap:20pt; flex-wrap:wrap;}
+  .authors{ font-size:28pt; font-weight:700;}
+  .authors .aff{ display:block; font-size:22pt; font-weight:400; color:#d3e6f7; margin-top:4pt;}
+  .meta{ font-size:21pt; color:#d3e6f7; text-align:right; line-height:1.35;}
+  .meta b{color:#fff}
+
+  /* ---------- Layout ---------- */
+  .figrow{ margin-top:0.26in; }
+  .fig{ }
+  .body{ display:flex; gap:0.42in; align-items:flex-start; margin-top:0.26in; }
+  .col{ flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:0.24in; }
+  .scoreband{ margin-top:0.26in; }
+
+  section.box{ background:var(--panel); border:2pt solid var(--line);
+    border-radius:16pt; padding:16pt 20pt 17pt; break-inside:avoid; }
+  section.box h2{ font-size:29pt; color:var(--navy); margin:0 0 10pt; font-weight:800;
+    display:flex; align-items:center; gap:12pt; letter-spacing:-.3pt;}
+  section.box h2 .num{ background:var(--navy); color:#fff; font-size:21pt;
+    width:40pt; height:40pt; border-radius:9pt; display:inline-flex;
+    align-items:center; justify-content:center; flex:0 0 auto;}
+  h3{ font-size:23pt; color:var(--navy2); margin:12pt 0 5pt; font-weight:700;}
+  p{ margin:0 0 10pt; }
+  ul{ margin:0 0 10pt; padding-left:26pt; }
+  li{ margin-bottom:7pt; }
+  b,strong{ font-weight:700; }
+  code, .mono{ font-family:"SF Mono","Menlo",monospace; font-size:.9em;
+    background:#eef2f5; padding:1pt 6pt; border-radius:5pt; }
+  .lead{ font-size:23pt; }
+  .small{ font-size:18pt; color:var(--muted); line-height:1.26;}
+
+  /* tier dots */
+  .tag{ display:inline-block; font-size:19pt; font-weight:700; color:#fff;
+    padding:3pt 12pt; border-radius:40pt; vertical-align:middle;}
+  .t-cpu{background:var(--cpu)} .t-lap{background:var(--lap)} .t-dc{background:var(--dc)}
+
+  /* ---------- Tables ---------- */
+  table{ width:100%; border-collapse:collapse; font-size:19pt; margin-top:6pt;}
+  th,td{ text-align:left; padding:8pt 10pt; border-bottom:1.5pt solid var(--line);
+    vertical-align:top;}
+  thead th{ background:var(--navy); color:#fff; font-size:18pt; border-bottom:none;}
+  thead th.num, td.num{ text-align:center; white-space:nowrap;}
+  tbody tr:nth-child(even){ background:#f6f9fb; }
+  .arm{ font-weight:700; }
+  .ci{ display:block; font-size:16pt; color:var(--muted); font-weight:400; }
+  td.hi{ background:var(--hi); font-weight:800; }
+  .rowcpu td:first-child{ box-shadow:inset 6pt 0 0 var(--cpu);}
+  .rowlap td:first-child{ box-shadow:inset 6pt 0 0 var(--lap);}
+  .rowdc  td:first-child{ box-shadow:inset 6pt 0 0 var(--dc);}
+  .rowdc{ background:var(--dcbg)!important; }
+
+  .exact{ font-size:18pt; color:var(--muted); margin-top:10pt; line-height:1.3;
+    font-family:"SF Mono","Menlo",monospace;}
+
+  .scoreband table{ font-size:20pt; }
+  .scoreband thead th{ font-size:18pt; }
+  .scoreband th,.scoreband td{ padding:6pt 10pt; }
+  .scoreband td .ci{ display:inline; margin-left:6pt; font-size:15pt; }
+  .scoreband .exact{ margin-top:7pt; }
+  .keyfind{ background:#0b3d6b; color:#fff; border-radius:16pt; padding:20pt 24pt;
+    font-size:24pt; line-height:1.32;}
+  .keyfind .big{ font-size:28pt; font-weight:800; color:#ffd166; display:block; margin-bottom:5pt;}
+
+  .callout{ border-left:8pt solid var(--dc); background:var(--dcbg);
+    padding:14pt 20pt; border-radius:0 12pt 12pt 0; margin:6pt 0 12pt;}
+  .win{ color:#0e7c86; font-weight:800;}
+  .loss{ color:#b23b1e; font-weight:800;}
+
+  /* ---------- Figure 1 ---------- */
+  figure.fig{ margin:0; background:#fff; border:2pt solid var(--line);
+    border-radius:16pt; padding:20pt 24pt 16pt; }
+  figure.fig figcaption{ font-size:20pt; margin-top:8pt; color:var(--muted);}
+  figure.fig figcaption b{ color:var(--navy); }
+  svg{ width:64%; height:auto; display:block; margin:0 auto;}
+
+  footer{ margin-top:0.35in; display:flex; justify-content:space-between;
+    align-items:center; font-size:20pt; color:var(--muted);
+    border-top:2pt solid var(--line); padding-top:14pt;}
+  footer b{ color:var(--navy); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ================= HEADER ================= -->
+  <header>
+    <div class="venue">ARCTIC · Scientific Computing Day (SCD) 2026 · Georgia State University</div>
+    <h1 class="title">The CPU-vs-GPU Battle for Search Relevance:<br>
+      Where the <span class="em">~0.3&ndash;0.5 Quality Ceiling</span> Is the <span class="em">Task</span>, Not the <span class="em">Model Size</span></h1>
+    <div class="subtitle">An honest, reproducible benchmark of six relevance-grading judges across CPU, a laptop GPU (Apple Metal), and a datacenter GPU (NRP/Nautilus)</div>
+    <div class="authorline">
+      <div class="authors">Ferosh Jacob &nbsp;&amp;&nbsp; Jiho Noh
+        <span class="aff">Department of Computer Science, Kennesaw State University</span></div>
+      <div class="meta"><b>Presenter / PI:</b> Ferosh Jacob<br>
+        Contact: ferosh@northvalleyintel.com<br>
+        Metric: Quadratic Weighted Kappa (QWK), 95% CI</div>
+    </div>
+  </header>
+
+  <!-- ================= FIGURE 1 (full-width centerpiece) ================= -->
+  <div class="figrow">
+    <figure class="fig">
+      <svg viewBox="0 0 2600 780" role="img" aria-label="Figure 1: one shared evaluation pipeline fanning across three hardware tiers and converging on one QWK scorecard">
+        <defs>
+          <marker id="arw" markerWidth="12" markerHeight="12" refX="8" refY="4" orient="auto">
+            <path d="M0,0 L8,4 L0,8 Z" fill="#5b6b78"/>
+          </marker>
+          <marker id="arwT" markerWidth="12" markerHeight="12" refX="8" refY="4" orient="auto">
+            <path d="M0,0 L8,4 L0,8 Z" fill="#0e7c86"/>
+          </marker>
+          <marker id="arwD" markerWidth="12" markerHeight="12" refX="8" refY="4" orient="auto">
+            <path d="M0,0 L8,4 L0,8 Z" fill="#c9531a"/>
+          </marker>
+          <marker id="arwG" markerWidth="12" markerHeight="12" refX="8" refY="4" orient="auto">
+            <path d="M0,0 L8,4 L0,8 Z" fill="#5b6b78"/>
+          </marker>
+          <style>
+            .lbl{font-family:Helvetica,Arial,sans-serif;}
+            .bx{rx:12; ry:12; stroke-width:2.5;}
+            .h{font-weight:700;}
+          </style>
+        </defs>
+
+        <!-- ===== Stage 1: Inputs ===== -->
+        <text x="40" y="40" class="lbl h" font-size="26" fill="#0b3d6b">Shared inputs</text>
+        <rect x="30"  y="60"  width="270" height="70" class="bx" fill="#eef4f8" stroke="#0b3d6b"/>
+        <text x="165" y="92"  class="lbl h" font-size="24" fill="#12212e" text-anchor="middle">ESCI-test</text>
+        <text x="165" y="118" class="lbl"   font-size="20" fill="#4a5b68" text-anchor="middle">3,000 pairs</text>
+        <rect x="30"  y="150" width="270" height="70" class="bx" fill="#eef4f8" stroke="#0b3d6b"/>
+        <text x="165" y="182" class="lbl h" font-size="24" fill="#12212e" text-anchor="middle">WANDS</text>
+        <text x="165" y="208" class="lbl"   font-size="20" fill="#4a5b68" text-anchor="middle">3,000 pairs</text>
+        <rect x="30"  y="240" width="270" height="70" class="bx" fill="#f0f1f2" stroke="#9aa6ad" stroke-dasharray="8 6"/>
+        <text x="165" y="270" class="lbl h" font-size="21" fill="#7a868d" text-anchor="middle">Cortex set (4,576)</text>
+        <text x="165" y="295" class="lbl"   font-size="18" fill="#9aa6ad" text-anchor="middle">reproduction-only</text>
+        <text x="165" y="345" class="lbl"   font-size="19" fill="#4a5b68" text-anchor="middle">(query, product title)</text>
+
+        <!-- ===== Stage 2: Label mapping ===== -->
+        <line x1="300" y1="185" x2="360" y2="185" stroke="#5b6b78" stroke-width="3" marker-end="url(#arw)"/>
+        <rect x="360" y="120" width="250" height="130" class="bx" fill="#fff" stroke="#0b3d6b"/>
+        <text x="485" y="158" class="lbl h" font-size="23" fill="#0b3d6b" text-anchor="middle">Label mapping</text>
+        <text x="485" y="190" class="lbl"   font-size="20" fill="#12212e" text-anchor="middle">imports</text>
+        <text x="485" y="216" class="lbl h" font-size="21" fill="#12212e" text-anchor="middle">RELEVANCE_SCALE</text>
+        <text x="485" y="240" class="lbl"   font-size="20" fill="#4a5b68" text-anchor="middle">0&ndash;3 · from prod src</text>
+
+        <!-- ===== Stage 3: Shared harness ===== -->
+        <line x1="610" y1="185" x2="670" y2="185" stroke="#5b6b78" stroke-width="3" marker-end="url(#arw)"/>
+        <rect x="670" y="70" width="330" height="230" class="bx" fill="#eaf6ff" stroke="#12558f" stroke-width="3.5"/>
+        <text x="835" y="108" class="lbl h" font-size="24" fill="#0b3d6b" text-anchor="middle">Shared harness</text>
+        <text x="835" y="140" class="lbl"   font-size="19" fill="#12212e" text-anchor="middle">run_arm.mjs</text>
+        <text x="835" y="166" class="lbl"   font-size="19" fill="#12212e" text-anchor="middle">&#8595; arm.predict()</text>
+        <text x="835" y="192" class="lbl"   font-size="19" fill="#12212e" text-anchor="middle">&#8595; evaluate.mjs</text>
+        <line x1="700" y1="208" x2="970" y2="208" stroke="#bcd4e6" stroke-width="2"/>
+        <text x="835" y="234" class="lbl h" font-size="20" fill="#12558f" text-anchor="middle">QWK + bootstrap 95% CI</text>
+        <text x="835" y="260" class="lbl"   font-size="18" fill="#4a5b68" text-anchor="middle">acc · &plusmn;1 · MAE · NDCG</text>
+        <text x="835" y="284" class="lbl"   font-size="18" fill="#4a5b68" text-anchor="middle">speed · peak RSS</text>
+        <text x="835" y="330" class="lbl h" font-size="19" fill="#c9531a" text-anchor="middle">IDENTICAL for every arm</text>
+
+        <!-- fan-out point -->
+        <line x1="1000" y1="185" x2="1055" y2="185" stroke="#5b6b78" stroke-width="3"/>
+        <circle cx="1055" cy="185" r="6" fill="#5b6b78"/>
+
+        <!-- ===== Stage 4: three hardware lanes ===== -->
+        <!-- CPU lane -->
+        <path d="M1055,185 C1090,185 1090,70 1130,70" fill="none" stroke="#5b6b78" stroke-width="3" marker-end="url(#arwG)"/>
+        <rect x="1075" y="20" width="150" height="34" rx="17" fill="#5b6b78"/>
+        <text x="1150" y="43" class="lbl h" font-size="19" fill="#fff" text-anchor="middle">CPU · Node</text>
+        <rect x="1135" y="60" width="360" height="70" class="bx" fill="#eceff1" stroke="#5b6b78"/>
+        <text x="1160" y="92" class="lbl h" font-size="22" fill="#12212e">A &mdash; BM25</text>
+        <text x="1160" y="116" class="lbl"  font-size="19" fill="#4a5b68">classical lexical baseline (floor)</text>
+
+        <!-- Laptop GPU lane -->
+        <path d="M1055,185 L1130,185" fill="none" stroke="#0e7c86" stroke-width="3"/>
+        <rect x="1075" y="150" width="330" height="34" rx="17" fill="#0e7c86"/>
+        <text x="1240" y="173" class="lbl h" font-size="18" fill="#fff" text-anchor="middle">Laptop GPU · Apple Metal (MPS/MLX)</text>
+        <rect x="1135" y="196" width="360" height="64" class="bx" fill="#e5f4f5" stroke="#0e7c86"/>
+        <text x="1160" y="224" class="lbl h" font-size="21" fill="#12212e">B &mdash; Prompted llama3.2:3b</text>
+        <text x="1160" y="248" class="lbl"  font-size="18" fill="#0e7c86">prompted, no training · = shipped judge</text>
+        <rect x="1135" y="270" width="360" height="64" class="bx" fill="#e5f4f5" stroke="#0e7c86"/>
+        <text x="1160" y="298" class="lbl h" font-size="21" fill="#12212e">C &mdash; bge-reranker-v2-m3</text>
+        <text x="1160" y="322" class="lbl"  font-size="18" fill="#0e7c86">cross-encoder · trained on ESCI (MPS)</text>
+        <rect x="1135" y="344" width="360" height="64" class="bx" fill="#e5f4f5" stroke="#0e7c86"/>
+        <text x="1160" y="372" class="lbl h" font-size="21" fill="#12212e">D &mdash; Llama-3.2-3B LoRA</text>
+        <text x="1160" y="396" class="lbl"  font-size="18" fill="#0e7c86">trained on ESCI · logit-read (MLX)</text>
+
+        <!-- Datacenter GPU lane -->
+        <path d="M1055,185 C1090,185 1090,460 1130,460" fill="none" stroke="#c9531a" stroke-width="3" marker-end="url(#arwD)"/>
+        <rect x="1075" y="424" width="420" height="34" rx="17" fill="#c9531a"/>
+        <text x="1285" y="447" class="lbl h" font-size="18" fill="#fff" text-anchor="middle">Datacenter GPU · NRP/Nautilus · NVIDIA · vLLM</text>
+        <rect x="1135" y="466" width="360" height="70" class="bx" fill="#fbe9df" stroke="#c9531a"/>
+        <text x="1160" y="498" class="lbl h" font-size="21" fill="#12212e">R2 &mdash; Prompted Qwen2.5-7B</text>
+        <text x="1160" y="522" class="lbl"  font-size="17" fill="#c9531a">only model + hardware changed vs B</text>
+
+        <!-- lane arrows into scorecard -->
+        <line x1="1495" y1="95"  x2="1720" y2="300" stroke="#5b6b78" stroke-width="3" marker-end="url(#arw)"/>
+        <line x1="1495" y1="228" x2="1720" y2="300" stroke="#0e7c86" stroke-width="3" marker-end="url(#arwT)"/>
+        <line x1="1495" y1="302" x2="1720" y2="315" stroke="#0e7c86" stroke-width="3" marker-end="url(#arwT)"/>
+        <line x1="1495" y1="376" x2="1720" y2="330" stroke="#0e7c86" stroke-width="3" marker-end="url(#arwT)"/>
+        <line x1="1495" y1="501" x2="1720" y2="345" stroke="#c9531a" stroke-width="3" marker-end="url(#arwD)"/>
+
+        <!-- ===== Stage 5: QWK scorecard convergence panel ===== -->
+        <rect x="1730" y="40" width="840" height="700" class="bx" fill="#fff" stroke="#0b3d6b" stroke-width="3.5"/>
+        <text x="2150" y="82" class="lbl h" font-size="26" fill="#0b3d6b" text-anchor="middle">One QWK scorecard</text>
+        <text x="2150" y="112" class="lbl"  font-size="20" fill="#4a5b68" text-anchor="middle">ESCI &#9679; and WANDS &#9711; per arm, on a shared 0&ndash;0.6 QWK axis</text>
+
+        <!-- plot geometry: axis x from 1800 (0.0) to 2500 (0.6): scale = 700/0.6 -->
+        <!-- ceiling band 0.3-0.5 -->
+        <rect x="2150" y="150" width="234" height="520" fill="#fff3d6" stroke="#e0a83a" stroke-width="2" stroke-dasharray="10 7"/>
+        <text x="2267" y="180" class="lbl h" font-size="19" fill="#b8860b" text-anchor="middle">~0.3&ndash;0.5 task-ceiling band</text>
+
+        <!-- axis ticks -->
+        <line x1="1800" y1="668" x2="2500" y2="668" stroke="#9aa6ad" stroke-width="2"/>
+        <g font-family="Helvetica,Arial" font-size="17" fill="#7a868d" text-anchor="middle">
+          <text x="1800" y="695">0.0</text>
+          <text x="1917" y="695">0.1</text>
+          <text x="2033" y="695">0.2</text>
+          <text x="2150" y="695">0.3</text>
+          <text x="2267" y="695">0.4</text>
+          <text x="2384" y="695">0.5</text>
+          <text x="2500" y="695">0.6</text>
+        </g>
+
+        <!-- rows: y for each arm; ESCI filled circle, WANDS open circle; x = 1800 + qwk*1166.67 -->
+        <!-- A: ESCI .222 -> 2059 ; WANDS .155 -> 1981 -->
+        <text x="1745" y="205" class="lbl h" font-size="20" fill="#5b6b78" text-anchor="end">A</text>
+        <line x1="1800" y1="198" x2="2500" y2="198" stroke="#eef2f5" stroke-width="1.5"/>
+        <circle cx="2059" cy="198" r="11" fill="#5b6b78"/>
+        <circle cx="1981" cy="198" r="11" fill="#fff" stroke="#5b6b78" stroke-width="3"/>
+        <!-- B: ESCI .288 -> 2136 ; WANDS .244 -> 2085 -->
+        <text x="1745" y="277" class="lbl h" font-size="20" fill="#0e7c86" text-anchor="end">B</text>
+        <line x1="1800" y1="270" x2="2500" y2="270" stroke="#eef2f5" stroke-width="1.5"/>
+        <circle cx="2136" cy="270" r="11" fill="#0e7c86"/>
+        <circle cx="2085" cy="270" r="11" fill="#fff" stroke="#0e7c86" stroke-width="3"/>
+        <!-- C: ESCI .360 -> 2220 ; WANDS .299 -> 2149 -->
+        <text x="1745" y="349" class="lbl h" font-size="20" fill="#0e7c86" text-anchor="end">C</text>
+        <line x1="1800" y1="342" x2="2500" y2="342" stroke="#eef2f5" stroke-width="1.5"/>
+        <circle cx="2220" cy="342" r="11" fill="#0e7c86"/>
+        <circle cx="2149" cy="342" r="11" fill="#fff" stroke="#0e7c86" stroke-width="3"/>
+        <!-- D: ESCI .353 -> 2212 ; WANDS .486 -> 2367 -->
+        <text x="1745" y="421" class="lbl h" font-size="20" fill="#0e7c86" text-anchor="end">D</text>
+        <line x1="1800" y1="414" x2="2500" y2="414" stroke="#eef2f5" stroke-width="1.5"/>
+        <circle cx="2212" cy="414" r="11" fill="#0e7c86"/>
+        <circle cx="2367" cy="414" r="11" fill="#fff" stroke="#0e7c86" stroke-width="3"/>
+        <!-- R2: ESCI .361 -> 2221 ; WANDS .354 -> 2213 -->
+        <text x="1745" y="493" class="lbl h" font-size="20" fill="#c9531a" text-anchor="end">R2</text>
+        <line x1="1800" y1="486" x2="2500" y2="486" stroke="#eef2f5" stroke-width="1.5"/>
+        <circle cx="2221" cy="486" r="11" fill="#c9531a"/>
+        <circle cx="2213" cy="486" r="11" fill="#fff" stroke="#c9531a" stroke-width="3"/>
+
+        <!-- annotation: LoRA WANDS reach -->
+        <line x1="2367" y1="414" x2="2440" y2="560" stroke="#0e7c86" stroke-width="2" stroke-dasharray="5 4"/>
+        <text x="2440" y="585" class="lbl h" font-size="18" fill="#0e7c86" text-anchor="middle">D · WANDS 0.486</text>
+        <text x="2440" y="608" class="lbl"   font-size="16" fill="#4a5b68" text-anchor="middle">best out-of-domain</text>
+
+        <!-- legend -->
+        <circle cx="1770" cy="150" r="9" fill="#0b3d6b"/>
+        <text x="1786" y="157" class="lbl" font-size="17" fill="#4a5b68">ESCI</text>
+        <circle cx="1860" cy="150" r="9" fill="#fff" stroke="#0b3d6b" stroke-width="3"/>
+        <text x="1876" y="157" class="lbl" font-size="17" fill="#4a5b68">WANDS</text>
+      </svg>
+      <figcaption><b>Figure 1.</b> One shared evaluation pipeline fanning across three hardware tiers &mdash; CPU, laptop GPU (Apple Metal), datacenter GPU (NRP/Nautilus &middot; vLLM) &mdash; all converging on a single QWK scorecard. The <b>harness box is byte-identical for every arm</b>, so any movement is attributable to the model &amp; hardware, not pipeline drift. Vector diagram (built for print). Every plotted QWK is the exact value from the results table below.</figcaption>
+    </figure>
+  </div>
+
+  <!-- ================= BODY COLUMNS ================= -->
+  <div class="body">
+
+    <!-- ---------- Column A ---------- -->
+    <div class="col">
+    <section class="box">
+      <h2><span class="num">0</span>Abstract</h2>
+      <p class="lead">E-commerce search must grade how well each product matches a query on an ordinal <b>0&ndash;3</b> scale (0 Irrelevant &middot; 1 Marginal &middot; 2 Relevant &middot; 3 Perfect). We ask an honest, reproducible question: <b>how good a relevance judge can run entirely on a laptop, and when is a GPU actually worth it?</b></p>
+      <p>Using one shared harness and identical held-out sets (Amazon <b>ESCI</b> and Wayfair <b>WANDS</b>, 3,000 pairs each, independent human labels), we benchmark six judges across three hardware tiers: a <b>CPU</b> lexical baseline (BM25); three <b>laptop-GPU</b> arms on Apple Metal (a prompted <code>llama3.2:3b</code>, a fine-tuned <code>bge-reranker-v2-m3</code> cross-encoder, and a <code>Llama-3.2-3B</code> LoRA read via label-token logits); and a <b>datacenter-GPU</b> arm (<code>Qwen2.5-7B-Instruct</code> prompted via vLLM on an NRP/Nautilus GPU).</p>
+      <p>The headline metric is <b>Quadratic Weighted Kappa (QWK)</b> with bootstrap 95% CIs. <b>Key finding:</b> every judge lands in a narrow <b>~0.3&ndash;0.5 QWK band</b>. Scaling a prompted judge 3B&rarr;7B on a real GPU lifted QWK (+0.073 ESCI, +0.110 WANDS) enough to <i>match</i> the fine-tuned cross-encoder in-domain with <b>no training</b> &mdash; but did <b>not</b> break the band, and the best out-of-domain result (the 3B LoRA, WANDS 0.486) still stands. <b>The ceiling is the task, not the model size.</b> We report every loss beside every win.</p>
+    </section>
+
+    <section class="box">
+      <h2><span class="num">1</span>Background &amp; Problem</h2>
+      <ul>
+        <li><b>The task.</b> A production relevance service (codename <i>Cortex</i>) grades each <code>(query, product&nbsp;title)</code> pair on the 0&ndash;3 <code>RELEVANCE_SCALE</code>. Its shipped judge is an LLM-as-judge, one model call per pair.</li>
+        <li><b>The question.</b> Pointwise relevance grading is an <b>ordinal classification</b> problem. How well can it be done on a laptop, and where does reaching for the GPU &mdash; first the laptop's integrated GPU, then a datacenter card &mdash; actually pay off in accuracy?</li>
+        <li><b>Why it's hard / matters.</b> Relevance is <b>intent, not word overlap</b>; a &ldquo;2 vs 1&rdquo; boundary is genuinely subjective even for humans. An on-device judge is cheaper and private, but must be shown to <b>beat the local judge it would replace</b>, on independent labels &mdash; not merely reproduce it.</li>
+      </ul>
+    </section>
+
+    <section class="box">
+      <h2><span class="num">4</span>Where each arm LOST</h2>
+      <p class="small">The project contract: report losses, not just wins.</p>
+      <ul>
+        <li><span class="tag t-cpu">A</span> <b>BM25:</b> lost everywhere on accuracy &mdash; lexical overlap &ne; intent. The floor, kept for reference.</li>
+        <li><span class="tag t-lap">B</span> <b>Prompted llama3.2:3b</b> (shipped judge): lost to both fine-tunes on every independent metric and is the <b>slowest on-device</b> arm. Its only high number &mdash; agreement with the service's own past grades &mdash; is <i>self-reproduction</i>, not accuracy.</li>
+        <li><span class="tag t-lap">C</span> <b>bge cross-encoder:</b> <span class="loss">LOST out-of-domain</span> &mdash; WANDS 0.299 vs the LoRA's 0.486. Also a train/test gap (dev QWK peaked 0.471 vs held-out ESCI 0.360 &mdash; the honest number is the held-out one).</li>
+        <li><span class="tag t-lap">D</span> <b>LoRA:</b> lost on speed/memory (~20&ndash;30&times; slower than bge) and only <i>tied</i> bge in-domain on ESCI (0.353 vs 0.360). Its win is generalization.</li>
+        <li><span class="tag t-dc">R2</span> <b>Qwen2.5-7B (GPU):</b>
+          <ul>
+            <li><span class="loss">Loses to the LoRA out-of-domain: WANDS 0.354 vs 0.486</span> &mdash; that number stands.</li>
+            <li>Loses on <b>exact accuracy</b> to both fine-tunes (0.343/0.332 vs bge 0.517/0.473, LoRA 0.483/0.603). Its QWK is respectable only because misses are ordinally <i>close</i> (&plusmn;1 acc 0.79/0.87).</li>
+            <li><b>Under-predicts grade 3</b> (predicts 3 for only 479/2,997 ESCI, 148/3,000 WANDS): agrees on <i>rank</i> far better than on <i>label</i>.</li>
+            <li>Needs a &ge;24 GB datacenter GPU + ~104 s load &mdash; bge still wins the efficiency tradeoff.</li>
+          </ul>
+        </li>
+      </ul>
+    </section>
+
+    </div><!-- /col A -->
+
+    <!-- ---------- Column B ---------- -->
+    <div class="col">
+    <section class="box">
+      <h2><span class="num">2</span>Methods</h2>
+      <h3>2.1 One shared evaluation harness</h3>
+      <p>Every arm runs the identical pipeline so the six are directly comparable. <b>Inputs:</b> <code>(query, product&nbsp;title)</code> only &mdash; the exact signal the production judge uses. <b>Label mapping</b> imports <code>RELEVANCE_SCALE</code> from the service's own source (never re-typed): ESCI E&rarr;3, S&rarr;2, C&rarr;1, I&rarr;0; WANDS Exact&rarr;3, Partial&rarr;2, Irrelevant&rarr;0 (grade 1 deliberately unpopulated).</p>
+      <p><b>Metric (headline): QWK</b> &mdash; ordinal agreement that penalizes a 3-vs-0 miss far more than a 3-vs-2 miss &mdash; with a <b>1,000-resample bootstrap 95% CI</b>. Secondary: exact accuracy, &plusmn;1 accuracy, MAE, NDCG. Speed and peak RSS measured per arm.</p>
+      <h3>2.2 Datasets &amp; the honest-labels rule</h3>
+      <p><b>ESCI</b> (Amazon; native query-disjoint split, verified 0 query overlap) and <b>WANDS</b> (Wayfair furniture; eval-only) carry the accuracy verdict &mdash; independent human-derived labels. A <b>circularity guard:</b> the service's 4,576 past validations are used <i>only</i> as a reproduction check &mdash; <b>92.3%</b> of those grades came from the same local <code>llama3.2:3b</code>, so agreeing with them measures reproduction, not accuracy. Every accuracy claim here is on ESCI/WANDS only.</p>
+      <h3>2.3 The six judges (arms), by hardware tier</h3>
+      <table>
+        <thead><tr><th>Tier</th><th>Arm &amp; approach</th></tr></thead>
+        <tbody>
+          <tr class="rowcpu"><td><span class="tag t-cpu">CPU</span></td><td><b>A &mdash; BM25</b> &mdash; classical lexical baseline (floor). CPU, instant.</td></tr>
+          <tr class="rowlap"><td><span class="tag t-lap">Laptop&nbsp;GPU</span></td><td><b>B &mdash; Prompted <code>llama3.2:3b</code></b> &mdash; LLM-as-judge via Ollama = shipped on-device judge. Metal, seconds/pair.</td></tr>
+          <tr class="rowlap"><td><span class="tag t-lap">Laptop&nbsp;GPU</span></td><td><b>C &mdash; bge-reranker-v2-m3</b> &mdash; cross-encoder fine-tuned on ESCI, 4-class argmax (PyTorch-MPS). ~28&nbsp;ms/pair.</td></tr>
+          <tr class="rowlap"><td><span class="tag t-lap">Laptop&nbsp;GPU</span></td><td><b>D &mdash; Llama-3.2-3B LoRA</b> &mdash; LoRA fine-tune, read label-token logits (no free generation, Apple MLX). ~0.4&ndash;0.9&nbsp;s/pair.</td></tr>
+          <tr class="rowdc"><td><span class="tag t-dc">Datacenter&nbsp;GPU</span></td><td><b>R2 &mdash; Prompted <code>Qwen2.5-7B-Instruct</code></b> &mdash; SAME prompt+parser+QWK as Arm B, bigger model, via vLLM. NVIDIA GPU, batched.</td></tr>
+        </tbody>
+      </table>
+      <p class="small">Arms A&ndash;D (Round 1) run on an Apple M-series laptop (16&nbsp;GB); the &ldquo;GPU&rdquo; there is the integrated Apple GPU (Metal) &mdash; no hand-written CUDA/Metal kernels. <b>Round-2 (R2)</b> is the controlled scale-up: it changes <b>only the model and the hardware</b>, holding prompt, parser, QWK code and eval sets <b>byte-for-byte identical</b> to Arm B (system-prompt sha256 matched on laptop and in-cluster). Preferred model was <b>Llama-3.1-8B-Instruct</b> (clean same-family 3B&rarr;8B), but it is gated with no <code>HF_TOKEN</code>, so open <b>Qwen2.5-7B-Instruct</b> was used (stated confound: family <i>and</i> size change). Infra: 1&times; NVIDIA GPU on NRP/Nautilus via vLLM chat, namespace <code>kennesaw-state-fjacob</code>, RTX-3090/A10-class node; model load 103.8&nbsp;s. Parse failures are excluded from QWK, <b>never coerced to 0</b>.</p>
+    </section>
+
+    <section class="box">
+      <h2><span class="num">5</span>Limitations &amp; honest caveats</h2>
+      <ul class="small">
+        <li><b>L1 &mdash; Absolute QWK is modest.</b> Everything sits at ~0.3&ndash;0.5: real improvements over baseline, <b>not a solved problem</b>.</li>
+        <li><b>L2 &mdash; Compare arms WITHIN a dataset only.</b> WANDS is a coarser 3-class space (0/2/3, no grade 1), so a WANDS number and an ESCI number are not on the same ruler.</li>
+        <li><b>L3 &mdash; Independent labels = accuracy; service history = reproduction.</b> 92.3% of past grades came from the same local model &mdash; excluded from every accuracy claim.</li>
+        <li><b>L4 &mdash; This is an ON-DEVICE contest.</b> The service's shipped default is cloud-first (a hosted Gemini model), not benchmarked and likely to beat every laptop-bound arm. The claim is &ldquo;no API, runs on this machine, and beats the local judge&rdquo; &mdash; not &ldquo;beats frontier cloud models.&rdquo;</li>
+        <li><b>L5 &mdash; Round-2 family confound (open).</b> Qwen2.5-7B (open) stood in for Llama-3.1-8B (gated), so the +0.073/+0.110 mixes family with size. A clean same-family 3B&rarr;8B ablation is still open.</li>
+        <li><b>L6 &mdash; Latency methods differ across arms;</b> even normalized, the ordering (bge &Lt; LoRA &Lt; prompted) holds.</li>
+        <li><b>L7 &mdash; 14B/70B not run</b> &mdash; a deliberate choice: the 3B&rarr;7B trend already showed diminishing returns inside the band.</li>
+      </ul>
+    </section>
+
+    </div><!-- /col B -->
+
+    <!-- ---------- Column C ---------- -->
+    <div class="col">
+    <section class="box">
+      <div class="keyfind">
+        <span class="big">Key finding</span>
+        Two fine-tunes and a 2.3&times;-bigger prompted judge all cluster in the <b>~0.3&ndash;0.5 QWK band</b>. Scaling helped <i>within</i> the band but did not break <i>out</i> of it &mdash; the single best out-of-domain number, the 3B LoRA's <b>WANDS 0.486</b>, still stands. <b>The ceiling is the TASK, not the model size.</b>
+      </div>
+    </section>
+
+    <section class="box">
+      <h2><span class="num">3</span>Results &mdash; Round-2 read</h2>
+      <p><b>Scaling the prompted judge 3B&rarr;7B on a datacenter GPU lifted QWK &mdash; but stayed in the band.</b> vs Arm B (same method, 3B): <b>+0.073 on ESCI</b> (0.288&rarr;0.361) and <b>+0.110 on WANDS</b> (0.244&rarr;0.354). With <b>no fine-tuning</b>, the prompted 7B:</p>
+      <div class="callout">
+        <span class="win">&#10003; ties</span> the fine-tuned cross-encoder on ESCI (0.361 vs 0.360), and<br>
+        <span class="win">&#10003; beats</span> it on WANDS out-of-domain (0.354 vs 0.299).
+      </div>
+      <p><b>But it did NOT break the ceiling.</b> The 7B lands at ~0.35 on both sets &mdash; squarely inside the same ~0.3&ndash;0.5 band every Round-1 arm occupied. A 14B/70B prompted judge was <b>deliberately not run</b>: the trend showed diminishing returns inside the band, so more GPU was not justified.</p>
+      <h3>3.3 Speed &amp; memory &mdash; why the laptop still wins deployment</h3>
+      <table>
+        <thead><tr><th>Arm</th><th class="num">Latency / pair</th><th class="num">Peak mem</th></tr></thead>
+        <tbody>
+          <tr class="rowcpu"><td><b>A</b> BM25</td><td class="num">~instant (&lt;0.01&nbsp;ms)</td><td class="num">~0.11&nbsp;GB</td></tr>
+          <tr class="rowlap"><td><b>B</b> Prompted 3b</td><td class="num">~5.4&nbsp;s / ~5.2&nbsp;s<span class="ci">conc-4; ~0.73&ndash;0.77 pairs/s</span></td><td class="num">Ollama ~5&ndash;6&nbsp;GB</td></tr>
+          <tr class="rowlap"><td><b>C</b> bge</td><td class="num"><b>27.9&nbsp;ms</b> / 29.6&nbsp;ms<span class="ci">p95 ~38&ndash;40&nbsp;ms; 0 parse fail</span></td><td class="num"><b>~1.06&nbsp;GB</b></td></tr>
+          <tr class="rowlap"><td><b>D</b> LoRA</td><td class="num">873&nbsp;ms / 360&nbsp;ms<span class="ci">p95 3.2&nbsp;s / 1.4&nbsp;s</span></td><td class="num">~2.67&nbsp;GB</td></tr>
+          <tr class="rowdc"><td><b>R2</b> Qwen 7B</td><td class="num"><b>23.5</b> / <b>32.8</b> pairs/s<span class="ci">batched; 103.8&nbsp;s load</span></td><td class="num">&ge;24&nbsp;GB GPU</td></tr>
+        </tbody>
+      </table>
+      <p class="small"><b>Deployment winner:</b> bge (Arm C) &mdash; matches/beats the on-device judge on accuracy at <b>~1&ndash;2 orders of magnitude faster</b> (~28&nbsp;ms vs seconds/pair) in <b>~5&times; less memory</b>, never malforming output. <b>Out-of-domain winner:</b> the LoRA (Arm D) &mdash; WANDS 0.486 (a 120-pair re-run reproduced ~0.448); cost ~20&ndash;30&times; slower than bge.</p>
+    </section>
+
+    <section class="box">
+      <h2><span class="num">6</span>Conclusion &amp; impact</h2>
+      <p class="lead">For an on-device search-relevance judge, <b>fine-tuning a small specialist (bge cross-encoder) is the best accuracy-per-millisecond</b> &mdash; better than the shipped judge, ~1&ndash;2 orders of magnitude faster, ~5&times; lighter.</p>
+      <p>A bigger <i>prompted</i> model on a datacenter GPU buys <b>in-domain parity with no training</b>, but not a breakthrough: the <b>~0.3&ndash;0.5 QWK ceiling is a property of the task</b>, and the best out-of-domain result comes from a <b>3B LoRA on a laptop</b>, not from more GPU.</p>
+      <p><b>Practical takeaway:</b> reach for the GPU to train a small specialist or to skip training via a mid-size prompted model &mdash; but don't expect raw model size to break the quality ceiling on pointwise relevance.</p>
+      <h3>Reproducibility</h3>
+      <p class="small">All arms share one harness (<code>scripts/run_arm.mjs</code>, <code>src/evaluate.mjs</code>); label mapping imports the production <code>RELEVANCE_SCALE</code>; datasets are public ESCI and WANDS. Round-2 held prompt/parser/QWK byte-identical to Round-1 Arm B and ran on NRP/Nautilus via vLLM. Journals <code>00</code>&ndash;<code>09</code> document every decision, including the discarded first Arm-B run and the provider-mix correction. Repo: <code>experiments/relevancy-replacement/</code>.</p>
+    </section>
+
+    </div><!-- /col C -->
+
+  </div><!-- /body -->
+
+  <!-- ---------- Full-width scorecard (the anchor) ---------- -->
+  <div class="scoreband">
+    <section class="box">
+      <h2><span class="num">3</span>Headline scorecard &mdash; QWK on the independent held-out sets (95% CI), all six arms</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Tier</th><th>Arm</th>
+            <th class="num">ESCI QWK (95% CI)</th><th class="num">WANDS QWK (95% CI)</th>
+            <th class="num">ESCI acc</th><th class="num">WANDS acc</th>
+            <th>Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="rowcpu">
+            <td><span class="tag t-cpu">CPU</span></td><td class="arm">A &mdash; BM25</td>
+            <td class="num">0.222 <span class="ci">0.183&ndash;0.256</span></td>
+            <td class="num">0.155 <span class="ci">0.128&ndash;0.184</span></td>
+            <td class="num">0.401</td><td class="num">0.377</td>
+            <td class="small mono">bm25__{esci,wands}</td>
+          </tr>
+          <tr class="rowlap">
+            <td><span class="tag t-lap">Laptop&nbsp;GPU</span></td><td class="arm">B &mdash; Prompted <code>llama3.2:3b</code> <span class="small">(= shipped judge)</span></td>
+            <td class="num">0.288 <span class="ci">0.258&ndash;0.320</span></td>
+            <td class="num">0.244 <span class="ci">0.217&ndash;0.271</span></td>
+            <td class="num">0.317</td><td class="num">0.310</td>
+            <td class="small mono">ollama_prompt__{esci,wands}</td>
+          </tr>
+          <tr class="rowlap">
+            <td><span class="tag t-lap">Laptop&nbsp;GPU</span></td><td class="arm">C &mdash; bge cross-encoder (fine-tuned)</td>
+            <td class="num hi">0.360 <span class="ci">0.325&ndash;0.391</span></td>
+            <td class="num">0.299 <span class="ci">0.262&ndash;0.334</span></td>
+            <td class="num">0.517</td><td class="num">0.473</td>
+            <td class="small mono">bge_reranker__{esci,wands}</td>
+          </tr>
+          <tr class="rowlap">
+            <td><span class="tag t-lap">Laptop&nbsp;GPU</span></td><td class="arm">D &mdash; Llama-3.2-3B LoRA (logit-read)</td>
+            <td class="num">0.353 <span class="ci">0.320&ndash;0.385</span></td>
+            <td class="num hi">0.486 <span class="ci">0.453&ndash;0.517</span></td>
+            <td class="num">0.483</td><td class="num">0.603</td>
+            <td class="small mono">mlx_lora__{esci,wands}</td>
+          </tr>
+          <tr class="rowdc">
+            <td><span class="tag t-dc">Datacenter&nbsp;GPU</span></td><td class="arm">R2 &mdash; Prompted <code>Qwen2.5-7B</code> (GPU)</td>
+            <td class="num hi">0.361 <span class="ci">0.333&ndash;0.389</span></td>
+            <td class="num">0.354 <span class="ci">0.326&ndash;0.382</span></td>
+            <td class="num">0.343</td><td class="num">0.332</td>
+            <td class="small mono">gpu_prompt_qwen2.5-7b__round2 <span class="ci">(branch round2-gpu-arm)</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="exact">Exact QWK values: A 0.22204 / 0.15478 &middot; B 0.28823 / 0.24383 &middot; C 0.35996 / 0.29928 &middot; D 0.35275 / 0.48581 &middot; R2 0.36095 / 0.35367.</p>
+      <p class="small">Test sets: 3,000 pairs each. Arm B parsed 2,993 (ESCI) / 2,989 (WANDS) &mdash; 7 / 11 parse failures excluded, never coerced. R2 parsed 2,997 (ESCI) / 3,000 (WANDS) &mdash; 3 / 0 parse failures. Bold cells mark the top in-domain (C, ESCI 0.360), the best out-of-domain (D, WANDS 0.486), and the datacenter-GPU in-domain tie (R2, ESCI 0.361). Compare arms WITHIN a dataset only (limitation L2).</p>
+    </section>
+
+  </div>
+
+  <footer>
+    <div><b>ARCTIC / Scientific Computing Day 2026</b> &middot; Georgia State University &middot; Poster 36&Prime;&times;48&Prime;</div>
+    <div>Ferosh Jacob &amp; Jiho Noh &middot; Dept. of Computer Science, Kennesaw State University &middot; ferosh@northvalleyintel.com</div>
+  </footer>
+
+</div>
+</body>
+</html>
