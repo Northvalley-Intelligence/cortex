@@ -40,7 +40,6 @@ in the CMT fields below and Figure 1 in Section 2.4.
 | **Principal Investigator (PI)** | Ferosh Jacob (presenter / submitter) |
 | **All contributing authors** | Ferosh Jacob; Jiho Noh |
 | **Affiliation** | Department of Computer Science, Kennesaw State University |
-| **College** | College of Computing and Software Engineering (KSU home of the CS department — confirm exact CMT wording) |
 | **Department** | Computer Science |
 | **Primary subject area** | Machine Learning / Natural Language Processing (or nearest CMT menu equivalent) |
 | **Secondary subject area (optional)** | Information Retrieval / Search |
