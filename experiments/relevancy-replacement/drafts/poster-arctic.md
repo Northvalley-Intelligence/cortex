@@ -36,7 +36,7 @@ in the CMT fields below and Figure 1 in Section 2.4.
 
 | CMT field | Value to enter |
 |---|---|
-| **Title** | The CPU-vs-GPU Battle for Search Relevance: The ~0.3–0.5 Quality Ceiling Is the Task, Not the Model Size |
+| **Title** | The Quality Ceiling Is the Task, Not the Model Size: A Reproducible CPU/GPU Benchmark of Search-Relevance Judges |
 | **Principal Investigator (PI)** | Ferosh Jacob (presenter / submitter) |
 | **All contributing authors** | Ferosh Jacob; Jiho Noh |
 | **Affiliation** | Department of Computer Science, Kennesaw State University |
@@ -53,8 +53,8 @@ as PI.*
 
 ---
 
-# The CPU-vs-GPU Battle for Search Relevance: Where the ~0.3–0.5 Quality Ceiling Is the *Task*, Not the *Model Size*
-### An honest, reproducible benchmark of six relevance-grading judges across CPU, a laptop GPU (Apple Metal), and a datacenter GPU (NRP/Nautilus)
+# The Quality Ceiling Is the Task, Not the Model Size
+### A Reproducible CPU/GPU Benchmark of Search-Relevance Judges
 
 ---
 
