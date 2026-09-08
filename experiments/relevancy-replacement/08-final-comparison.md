@@ -48,3 +48,22 @@ at a latency cost.
   logit-read) — even normalized, the ordering (bge << LoRA << Cortex) holds.
 - Cortex's shipped DEFAULT is cloud-first (gemini); a cloud judge would likely
   beat all on-device arms on accuracy but violates "no API, on this machine."
+
+## Disagreement dump
+The headline numbers say how OFTEN an arm and Cortex disagree, not WHICH pairs —
+and on the cortex-validations set Cortex's labels are what is being audited, not
+ground truth, so a disagreement is a finding to judge, not an error to count. To
+regenerate the blind, side-by-side dump of the disagreeing pairs (the harness
+discards per-pair grades by default, so this needs a rerun with the sidecar on):
+
+```sh
+# 1. rerun the arm, keeping per-pair rows (results/predictions/, gitignored)
+node scripts/run_arm.mjs mlx_lora.mjs cortex_validations_sample.jsonl --predictions-out
+# 2. blind dump + sealed key; pass --out-dir to write outside this repo
+node scripts/disagreement_dump.mjs results/predictions/mlx_lora__cortex_validations_sample.jsonl
+```
+
+Column A/B is reshuffled per row from a fixed seed (42) and no arm name appears
+in `disagreements-blind.md`; `disagreements-key.json` resolves every row. Both
+outputs are row-level client data: this repo is PUBLIC and commits none of it
+(2026-08-23 audit finding), so the dump itself lives on the board, not here.

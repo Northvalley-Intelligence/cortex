@@ -12,8 +12,29 @@
  *
  * Never overwrites silently: if the output path already exists, the previous
  * file is renamed aside with its own timestamp suffix first.
+ *
+ * PER-PAIR PREDICTION SIDECAR (opt-in, handoff 07)
+ * ------------------------------------------------
+ * By default this harness writes ONLY aggregate metrics: the per-pair grades
+ * are computed in memory and discarded. That made the "which pairs does the
+ * best arm disagree with Cortex on?" question unanswerable without a full
+ * rerun, so runs can now opt in to keeping the rows:
+ *
+ *   node scripts/run_arm.mjs <arm> <dataset> --predictions-out
+ *   node scripts/run_arm.mjs <arm> <dataset> --predictions-out <path>
+ *   ARM_PREDICTIONS_OUT=1 node scripts/run_arm.mjs <arm> <dataset>
+ *
+ * A bare flag (or ARM_PREDICTIONS_OUT=1) writes the default path
+ * results/predictions/<arm>__<dataset>.jsonl; a value (flag argument or
+ * ARM_PREDICTIONS_OUT=<path>) writes there instead. One JSON object per line:
+ * {index, query, item, label, pred_grade}.
+ *
+ * PRIVACY: those rows are raw queries/titles/judgments. This repo is PUBLIC and
+ * commits no row-level data (2026-08-23 audit finding), so results/predictions/
+ * is gitignored and the sidecar stays OFF unless explicitly requested. Do not
+ * commit its output, and do not change that default.
  */
-import { readFileSync, writeFileSync, existsSync, renameSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, renameSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { evaluateArm } from "../src/evaluate.mjs";
@@ -23,10 +44,45 @@ const ARMS_DIR = path.join(__dirname, "..", "arms");
 const DATA_DIR = path.join(__dirname, "..", "data");
 const RESULTS_DIR = path.join(__dirname, "..", "results");
 
+/**
+ * Split `--predictions-out [path]` out of argv so the two positional arguments
+ * keep working exactly as before. Returns { positionals, predictionsOut } where
+ * predictionsOut is null (off), "" (on, use the default path), or a path.
+ */
+export function parseArgs(argv, env = {}) {
+  const positionals = [];
+  let predictionsOut = null;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--predictions-out") {
+      // A following token that isn't another flag is this flag's value.
+      const next = argv[i + 1];
+      if (next !== undefined && !next.startsWith("--")) {
+        predictionsOut = next;
+        i++;
+      } else {
+        predictionsOut = "";
+      }
+    } else if (a.startsWith("--predictions-out=")) {
+      predictionsOut = a.slice("--predictions-out=".length);
+    } else {
+      positionals.push(a);
+    }
+  }
+  if (predictionsOut === null && env.ARM_PREDICTIONS_OUT) {
+    const v = env.ARM_PREDICTIONS_OUT;
+    predictionsOut = v === "1" || v === "true" ? "" : v;
+  }
+  return { positionals, predictionsOut };
+}
+
 async function main() {
-  const [armFile, datasetFile] = process.argv.slice(2);
+  const { positionals, predictionsOut } = parseArgs(process.argv.slice(2), process.env);
+  const [armFile, datasetFile] = positionals;
   if (!armFile || !datasetFile) {
-    console.error("Usage: node scripts/run_arm.mjs <arm-file> <dataset-file>");
+    console.error(
+      "Usage: node scripts/run_arm.mjs <arm-file> <dataset-file> [--predictions-out [path]]"
+    );
     process.exit(1);
   }
 
@@ -70,6 +126,28 @@ async function main() {
   const evalPairs = pairs.map((p, i) => ({ ...p, pred_grade: predictions[i].pred_grade }));
   const timings = predictions.map((p) => ({ latency_ms: p.latency_ms, cold: !!p.cold }));
 
+  // Opt-in per-pair sidecar (see the module docstring). Written before scoring so
+  // the rows survive even if evaluation throws. Row-level data -- gitignored, never committed.
+  if (predictionsOut !== null) {
+    const sidecarPath = predictionsOut
+      ? path.resolve(predictionsOut)
+      : path.join(RESULTS_DIR, "predictions", `${armName}__${datasetName}.jsonl`);
+    mkdirSync(path.dirname(sidecarPath), { recursive: true });
+    const jsonl = evalPairs
+      .map((p, i) =>
+        JSON.stringify({
+          index: i,
+          query: p.query,
+          item: p.title,
+          label: p.gold_grade,
+          pred_grade: p.pred_grade,
+        })
+      )
+      .join("\n");
+    writeFileSync(sidecarPath, jsonl + "\n");
+    console.log(`Wrote per-pair predictions: ${sidecarPath} (${evalPairs.length} rows)`);
+  }
+
   // Reproduction-vs-accuracy note (journal 03/04): the Cortex past-validation set's "gold"
   // grades are Cortex's OWN historical judgments (92% from llama3.2:3b), not an independent
   // label -- any arm's score there measures agreement/reproduction, not accuracy. Attach the
@@ -100,7 +178,11 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// Only run when invoked as a script, so tests can import parseArgs without
+// executing a run. Unchanged behaviour for `node scripts/run_arm.mjs ...`.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
