@@ -11,3 +11,8 @@ __pycache__/
 *.pyc
 results/*.superseded-*.json
 results/.checkpoints/
+# Row-level data (raw queries/titles/judgments). This repo is PUBLIC and commits
+# no per-pair data (2026-08-23 audit finding) -- see scripts/run_arm.mjs sidecar
+# and scripts/disagreement_dump.mjs. Never un-ignore these.
+results/predictions/
+results/disagreements/
