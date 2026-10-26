@@ -12,7 +12,9 @@
  * limit, and an exhausted credit balance. A pinned call has nowhere to fall through to, so these
  * end the call as `exhausted`.
  */
-import { ProviderError, FAILURE_AVAILABILITY } from "../failures.mjs";
+import { ProviderError, FAILURE_AVAILABILITY, FAILURE_CONTENT } from "../failures.mjs";
+
+export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"];
 
 const ANTHROPIC_VERSION = "2023-06-01";
 const AVAILABILITY_BODY = /(overloaded|rate.?limit|credit balance|insufficient|billing|quota)/i;
@@ -25,8 +27,10 @@ export function buildAnthropicBody({ provider, prompt, systemPrompt, params }) {
   }
   return {
     model: provider.model,
-    max_tokens: params.maxTokens ?? 4096,
-    temperature: params.temperature ?? 0,
+    // Current models reject temperature/top_p/top_k (HTTP 400), so none is ever sent. Adaptive
+    // thinking spends output tokens, hence the large default budget.
+    max_tokens: params.maxTokens ?? 16000,
+    output_config: { effort: EFFORT_LEVELS.includes(params.effort) ? params.effort : "medium" },
     ...(systemPrompt ? { system: systemPrompt } : {}),
     messages: [{ role: "user", content }],
   };
@@ -75,6 +79,12 @@ export async function callAnthropic({ provider, prompt, systemPrompt, params, si
   }
 
   const data = await res.json();
+  if (data.stop_reason === "refusal") {
+    throw new ProviderError(`${provider.id}: model refused (${data.stop_details?.category ?? "unspecified"})`, {
+      failureKind: FAILURE_CONTENT,
+      provider: provider.id,
+    });
+  }
   const text = (data.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("");
   if (!Array.isArray(data.content)) {
     throw new ProviderError(`${provider.id}: response contained no content`, { provider: provider.id });

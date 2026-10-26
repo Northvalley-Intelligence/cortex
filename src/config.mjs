@@ -82,7 +82,8 @@ export const DEFAULT_PROVIDERS = [
  * Anthropic providers are PINNED-ONLY and therefore NOT in DEFAULT_PROVIDERS: a paid model must
  * never be reachable by a fallback-chain fall-through (nor change the relevance cache scope),
  * only by a call that names it via pin_provider (POST /v1/search-eval).
- * Costs are 0 on purpose: set from the current Anthropic price sheet before any paid run.
+ * Prices: Anthropic first-party, USD per MTok (claude-api skill price table, cached 2026-10-06):
+ * Haiku 5.5 0.10 in / 0.50 out; Sonnet 5.5 2 in / 10 out.
  */
 export const PINNED_PROVIDERS = [
   {
@@ -93,8 +94,8 @@ export const PINNED_PROVIDERS = [
     apiKeyEnv: "ANTHROPIC_API_KEY",
     timeoutMs: 120_000,
     effectiveContextWindow: 200_000,
-    costPer1kInputUsd: 0, // set from the current Anthropic price sheet before any paid run
-    costPer1kOutputUsd: 0, // set from the current Anthropic price sheet before any paid run
+    costPer1kInputUsd: 0.0001,
+    costPer1kOutputUsd: 0.0005,
     maxConcurrency: envInt("CORTEX_CLOUD_CONCURRENCY", 4),
   },
   {
@@ -105,9 +106,22 @@ export const PINNED_PROVIDERS = [
     apiKeyEnv: "ANTHROPIC_API_KEY",
     timeoutMs: 120_000,
     effectiveContextWindow: 200_000,
-    costPer1kInputUsd: 0, // set from the current Anthropic price sheet before any paid run
-    costPer1kOutputUsd: 0, // set from the current Anthropic price sheet before any paid run
+    costPer1kInputUsd: 0.002,
+    costPer1kOutputUsd: 0.01,
     maxConcurrency: envInt("CORTEX_CLOUD_CONCURRENCY", 4),
+  },
+  {
+    // Local vision model for image-bearing search evals; same Ollama server as "local".
+    id: "local-vision",
+    kind: "ollama",
+    baseUrl: process.env.CORTEX_OLLAMA_URL || "http://localhost:11434",
+    model: "gemma4:latest",
+    apiKeyEnv: "",
+    timeoutMs: 180_000,
+    effectiveContextWindow: 32_768,
+    costPer1kInputUsd: 0,
+    costPer1kOutputUsd: 0,
+    maxConcurrency: 1,
   },
 ];
 

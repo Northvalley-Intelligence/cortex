@@ -41,7 +41,7 @@ function redactString(value) {
   }
   // Backstop: if a live key from this process's own environment somehow appears verbatim,
   // remove it regardless of shape.
-  for (const name of ["GEMINI_API_KEY", "OPENROUTER_API_KEY"]) {
+  for (const name of ["GEMINI_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY"]) {
     const secret = process.env[name];
     if (secret && secret.length >= 8 && out.includes(secret)) {
       out = out.split(secret).join(`<${name}>`);
