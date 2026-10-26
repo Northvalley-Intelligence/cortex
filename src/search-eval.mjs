@@ -80,6 +80,34 @@ export function buildSearchEvalSystemPrompt(rubric) {
   ].join("\n");
 }
 
+/** JSON Schema of the model's listwise answer (Anthropic structured outputs: guarantees shape, not id completeness). */
+export const SEARCH_EVAL_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    groups: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          group_id: { type: "string" },
+          item_ids: { type: "array", items: { type: "string" } },
+          grade: { type: "integer", enum: [0, 1, 2, 3] },
+          reason: { type: "string" },
+        },
+        required: ["group_id", "item_ids", "grade", "reason"],
+        additionalProperties: false,
+      },
+    },
+    first_useful_position: { type: ["integer", "null"] },
+    ranking: { type: "string", enum: RANKING_VALUES },
+    ranking_reason: { type: "string" },
+    task_guidance: { type: "string", enum: TASK_GUIDANCE_VALUES },
+    intent: { type: "string", enum: INTENT_VALUES },
+  },
+  required: ["groups", "first_useful_position", "ranking", "ranking_reason", "task_guidance", "intent"],
+  additionalProperties: false,
+};
+
 export function searchEvalRubricHash(rubric) {
   return rubricHash(buildSearchEvalSystemPrompt(rubric));
 }

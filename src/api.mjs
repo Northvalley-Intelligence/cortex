@@ -9,6 +9,7 @@
  */
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { Queue, normalizeCallInput } from "./queue.mjs";
@@ -20,11 +21,13 @@ import { providerAvailable } from "./config.mjs";
 import { buildRelevanceJob, buildJudgePrompt, parseJudgment, ndcgForJudgments, buildJudgeSystemPrompt, rubricHash } from "./relevance.mjs";
 import { computeJudgmentKey, lookupJudgment, storeJudgment, judgeModelScope, judgmentCacheStats, clearJudgmentCache } from "./cache.mjs";
 import {
-  RESULT_TYPES, DEFAULT_WINDOW, buildSearchEvalSystemPrompt, searchEvalRubricHash, splitWindows,
+  RESULT_TYPES, DEFAULT_WINDOW, buildSearchEvalSystemPrompt, searchEvalRubricHash, SEARCH_EVAL_OUTPUT_SCHEMA, splitWindows,
   buildSearchEvalPrompt, parseSearchEval, reconcileWindows, buildScorecard, summarizeScores,
 } from "./search-eval.mjs";
 import { EFFORT_LEVELS } from "./providers/anthropic.mjs";
 import { storageStats, prune, prunablePreview } from "./maintenance.mjs";
+
+const OUTPUT_SCHEMA_HASH = createHash("sha256").update(JSON.stringify(SEARCH_EVAL_OUTPUT_SCHEMA)).digest("hex").slice(0, 16);
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -573,8 +576,9 @@ export function createApi(db, config) {
         const parts = splitWindows(s.results, windowSize);
         parts.forEach((items, w) => {
           const { prompt, images } = buildSearchEvalPrompt({ search: s, items, windowIndex: w, windowCount: parts.length });
-          const callParams = { ...effectiveParams, ...(images.length ? { images } : {}) };
-          const cache_key = computeJudgmentKey({ prompt, systemPrompt, params: callParams, modelScope });
+          const callParams = { ...effectiveParams, ...(images.length ? { images } : {}), output_schema: SEARCH_EVAL_OUTPUT_SCHEMA };
+          const { output_schema: _schema, ...keyParams } = callParams;
+          const cache_key = computeJudgmentKey({ prompt, systemPrompt, params: { ...keyParams, output_schema_hash: OUTPUT_SCHEMA_HASH }, modelScope });
           const hit = bypassCache ? null : lookupJudgment(db, cache_key);
           const win = { search_id: s.search_id, index: w, ids: items.map((r) => r.id), cache_key, call_index: null, cached: null };
           let cachedParse = null;

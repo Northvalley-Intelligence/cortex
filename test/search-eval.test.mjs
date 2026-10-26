@@ -10,6 +10,7 @@ import { createApi } from "../src/api.mjs";
 import { Worker } from "../src/worker.mjs";
 import { fakeProvider } from "./helpers/fake-provider.mjs";
 import { ProviderError } from "../src/failures.mjs";
+import { SEARCH_EVAL_OUTPUT_SCHEMA } from "../src/search-eval.mjs";
 import { callAnthropic } from "../src/providers/anthropic.mjs";
 import { SCORE_WEIGHTS, splitWindows } from "../src/search-eval.mjs";
 
@@ -300,6 +301,48 @@ describe("anthropic adapter", () => {
       assert.deepEqual(seen().output_config, { effort: "medium" });
       assert.equal(seen().max_tokens, 16000);
     });
+  });
+
+  test("output_schema adds output_config.format next to effort; absent otherwise", async () => {
+    await withFetch(okReply, async (seen) => {
+      await callAnthropic({ provider, prompt: "g", params: { effort: "high", output_schema: SEARCH_EVAL_OUTPUT_SCHEMA } });
+      assert.deepEqual(seen().output_config, { effort: "high", format: { type: "json_schema", schema: SEARCH_EVAL_OUTPUT_SCHEMA } });
+      await callAnthropic({ provider, prompt: "g", params: { effort: "high" } });
+      assert.equal("format" in seen().output_config, false);
+    });
+  });
+
+  test("SEARCH_EVAL_OUTPUT_SCHEMA is strict at every level and accepts a known-good answer", () => {
+    const check = (schema, v) => {
+      const types = [].concat(schema.type);
+      const t = v === null ? "null" : Array.isArray(v) ? "array" : Number.isInteger(v) ? "integer" : typeof v;
+      assert.ok(types.includes(t) || (t === "integer" && types.includes("number")), `type ${t} not in ${types}`);
+      if (schema.enum) assert.ok(schema.enum.includes(v), `${v} not in enum`);
+      if (t === "object") {
+        assert.equal(schema.additionalProperties, false);
+        assert.deepEqual([...schema.required].sort(), Object.keys(schema.properties).sort());
+        assert.deepEqual(Object.keys(v).sort(), [...schema.required].sort());
+        for (const k of schema.required) check(schema.properties[k], v[k]);
+      }
+      if (t === "array") v.forEach((x) => check(schema.items, x));
+    };
+    const good = {
+      groups: [{ group_id: "g1", item_ids: ["a", "b"], grade: 3, reason: "exact" }, { group_id: "g2", item_ids: ["c"], grade: 0, reason: "off" }],
+      first_useful_position: 1, ranking: "optimal", ranking_reason: "ok", task_guidance: "not_needed", intent: "resolved",
+    };
+    check(SEARCH_EVAL_OUTPUT_SCHEMA, good);
+    check(SEARCH_EVAL_OUTPUT_SCHEMA, { ...good, first_useful_position: null });
+    assert.throws(() => check(SEARCH_EVAL_OUTPUT_SCHEMA, { ...good, ranking: "bad" }));
+  });
+
+  test("search-eval route sends output_schema on every call; cache key still hits on repeat", async () => {
+    const { provider: p, calls } = answering("local", (ids) => allIn(ids, 3));
+    const env = await makeEnv([p]);
+    const a = await env.submit("local", [search()]);
+    await env.result(a.body.job_id);
+    assert.deepEqual(calls[0].params.output_schema, SEARCH_EVAL_OUTPUT_SCHEMA);
+    const b = await env.submit("local", [search()]);
+    assert.equal(b.body.cache.hits, 1);
   });
 
   test("refusal is a content failure naming the category", async () => {
