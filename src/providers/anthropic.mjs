@@ -30,7 +30,10 @@ export function buildAnthropicBody({ provider, prompt, systemPrompt, params }) {
     // Current models reject temperature/top_p/top_k (HTTP 400), so none is ever sent. Adaptive
     // thinking spends output tokens, hence the large default budget.
     max_tokens: params.maxTokens ?? 16000,
-    output_config: { effort: EFFORT_LEVELS.includes(params.effort) ? params.effort : "medium" },
+    output_config: {
+      effort: EFFORT_LEVELS.includes(params.effort) ? params.effort : "medium",
+      ...(params.output_schema ? { format: { type: "json_schema", schema: params.output_schema } } : {}),
+    },
     ...(systemPrompt ? { system: systemPrompt } : {}),
     messages: [{ role: "user", content }],
   };
