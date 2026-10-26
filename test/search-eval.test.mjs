@@ -1,0 +1,283 @@
+/**
+ * POST /v1/search-eval - listwise search evaluation. No network, no paid calls: every provider
+ * is a fake adapter that answers from the prompt it was actually sent.
+ */
+import { test, describe, afterEach } from "node:test";
+import assert from "node:assert/strict";
+import { openDb } from "../src/db.mjs";
+import { loadConfig } from "../src/config.mjs";
+import { createApi } from "../src/api.mjs";
+import { Worker } from "../src/worker.mjs";
+import { fakeProvider } from "./helpers/fake-provider.mjs";
+import { callAnthropic } from "../src/providers/anthropic.mjs";
+import { SCORE_WEIGHTS, splitWindows } from "../src/search-eval.mjs";
+
+const idsIn = (prompt) => [...prompt.matchAll(/\[id=([^\]]+)\]/g)].map((m) => m[1]);
+
+/** A provider whose answer is built from the ids in the prompt. `answer(ids, prompt)` -> object. */
+function answering(id, answer, overrides = {}) {
+  const calls = [];
+  const p = fakeProvider(id, { kind: "ok" }, {
+    ...overrides,
+    __adapter: async ({ provider, prompt, params }) => {
+      calls.push({ prompt, params });
+      return {
+        text: JSON.stringify(answer(idsIn(prompt), prompt)),
+        evaluatedTokens: 100, completionTokens: 20, requestedNumCtx: 32768,
+        truncationDetected: false, providerVersion: provider.model, requestPayload: { model: provider.model, prompt },
+      };
+    },
+  });
+  return { provider: p, calls };
+}
+
+const verdict = (groups, extra = {}) => ({
+  groups, first_useful_position: 1, ranking: "optimal", ranking_reason: "ok",
+  task_guidance: "met", intent: "resolved", ...extra,
+});
+const allIn = (ids, grade) => verdict([{ group_id: "g1", item_ids: ids, grade, reason: "all" }]);
+const singles = (ids, gradeOf) => ids.map((id, i) => ({ group_id: `g${i}`, item_ids: [id], grade: gradeOf(i), reason: "r" }));
+
+const items = (n) =>
+  Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, position: i + 1, type: "product", title: `Item ${i + 1}` }));
+const search = (over = {}) => ({ search_id: "s1", query: "pizza stone", results: items(3), ...over });
+
+let envs = [];
+async function makeEnv(providers) {
+  const db = openDb(":memory:");
+  const config = loadConfig({ providers });
+  const api = createApi(db, config);
+  const worker = new Worker(db, api.queue, config);
+  worker.start();
+  await new Promise((r) => api.server.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${api.server.address().port}`;
+  const env = {
+    db, base,
+    post: (path, body) => fetch(`${base}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+    async submit(provider, searches, extra = {}) {
+      const res = await env.post("/v1/search-eval", { client: "t", provider, rubric: "RUBRIC: grade by fit.", searches, ...extra });
+      return { status: res.status, body: await res.json() };
+    },
+    async result(jobId) {
+      for (let i = 0; i < 300; i += 1) {
+        const r = await (await fetch(`${base}/v1/search-eval/${jobId}`)).json();
+        if (r.status === "complete") return r;
+        await new Promise((res) => setTimeout(res, 20));
+      }
+      throw new Error("job did not complete");
+    },
+    async close() { await worker.stop(); api.server.close(); },
+  };
+  envs.push(env);
+  return env;
+}
+afterEach(async () => { for (const e of envs) await e.close(); envs = []; });
+
+describe("request validation", () => {
+  test("missing rubric -> 400 naming rubric (never the hardware default); unknown provider -> 400; duplicate search_id -> 400", async () => {
+    const { provider } = answering("local", (ids) => allIn(ids, 3));
+    const env = await makeEnv([provider]);
+    const noRubric = await env.post("/v1/search-eval", { client: "t", provider: "local", searches: [search()] });
+    assert.equal(noRubric.status, 400);
+    assert.match((await noRubric.json()).error, /rubric/);
+    const badProvider = await env.submit("nope", [search()]);
+    assert.equal(badProvider.status, 400);
+    assert.match(badProvider.body.error, /unknown provider/);
+    const noProvider = await env.post("/v1/search-eval", { client: "t", rubric: "r", searches: [search()] });
+    assert.equal(noProvider.status, 400);
+    const dup = await env.submit("local", [search(), search()]);
+    assert.equal(dup.status, 400);
+    assert.match(dup.body.error, /duplicate search_id/);
+  });
+
+  test("duplicate result id, bad type and a private image host are rejected", async () => {
+    const { provider } = answering("local", (ids) => allIn(ids, 3));
+    const env = await makeEnv([provider]);
+    const dupId = await env.submit("local", [search({ results: [items(1)[0], items(1)[0]] })]);
+    assert.equal(dupId.status, 400);
+    const badType = await env.submit("local", [search({ results: [{ ...items(1)[0], type: "gadget" }] })]);
+    assert.equal(badType.status, 400);
+    const privateImg = await env.submit("local", [search({ results: [{ ...items(1)[0], image_url: "http://127.0.0.1/x.png" }] })]);
+    assert.equal(privateImg.status, 400);
+  });
+});
+
+describe("grading and scorecard", () => {
+  test("size variants returned in one group get identical grades, aligned by id", async () => {
+    const { provider } = answering("local", (ids) => verdict([
+      { group_id: "g1", item_ids: [ids[0], ids[1]], grade: 3, reason: "same product, two sizes" },
+      { group_id: "g2", item_ids: [ids[2]], grade: 1, reason: "other" },
+    ]));
+    const env = await makeEnv([provider]);
+    const { body } = await env.submit("local", [search()]);
+    const r = await env.result(body.job_id);
+    const got = r.searches[0].items;
+    assert.equal(got[0].grade, got[1].grade);
+    assert.equal(got[0].group_id, got[1].group_id);
+    assert.deepEqual(got.map((i) => [i.id, i.grade]), [["p1", 3], ["p2", 3], ["p3", 1]]);
+  });
+
+  test("head complete: ranking points are 20 even when the model says minor, coverage is 30", async () => {
+    const { provider } = answering("local", (ids) => verdict(
+      singles(ids, (i) => (i < 3 ? 3 : 0)),
+      { ranking: "minor", task_guidance: "not_needed" },
+    ));
+    const env = await makeEnv([provider]);
+    const { body } = await env.submit("local", [search({ results: items(10), applicable_ids: ["p1", "p2", "p3"] })]);
+    const s = (await env.result(body.job_id)).searches[0];
+    assert.equal(s.head_complete, true);
+    assert.equal(s.coverage, 1);
+    // first 30 + coverage 30 + ranking 20 (floor, not minor's 12) + effort 10 = 90/90 -> 100.
+    assert.equal(s.score_0_100, 100);
+  });
+
+  test("requirement violation: applicable item at position 3, model says major -> ranking 0", async () => {
+    const { provider } = answering("local", (ids) => verdict(
+      singles(ids, (i) => (i === 2 ? 3 : 0)),
+      { ranking: "major", task_guidance: "missing" },
+    ));
+    const env = await makeEnv([provider]);
+    const { body } = await env.submit("local", [search({ applicable_ids: ["p3"] })]);
+    const s = (await env.result(body.job_id)).searches[0];
+    assert.equal(s.head_complete, false);
+    assert.equal(s.first_useful_position, 3);
+    // first (pos 3) 20 + coverage 30 + ranking 0 + effort 10 + guidance 0.
+    assert.equal(s.score_0_100, 60);
+    assert.equal(SCORE_WEIGHTS.ranking_points.major, 0);
+  });
+
+  test("unresolved intent -> score null and counted in unresolved, not in the mean", async () => {
+    const { provider } = answering("local", (ids, prompt) => (prompt.includes("Search term: unclear")
+      ? { ...allIn(ids, 0), intent: "unresolved" }
+      : allIn(ids, 3)));
+    const env = await makeEnv([provider]);
+    const { body } = await env.submit("local", [
+      search({ search_id: "a", query: "pizza stone" }), search({ search_id: "b", query: "unclear" }),
+    ]);
+    const r = await env.result(body.job_id);
+    const byId = Object.fromEntries(r.searches.map((s) => [s.search_id, s]));
+    assert.equal(byId.b.score_0_100, null);
+    assert.equal(typeof byId.a.score_0_100, "number");
+    assert.equal(r.counts.unresolved, 1);
+    assert.equal(r.findability_score, byId.a.score_0_100, "the mean covers only the non-null score");
+  });
+});
+
+describe("failure handling", () => {
+  test("a model that omits an item id fails the search and no grade is fabricated", async () => {
+    const { provider } = answering("local", (ids) => allIn(ids.slice(0, -1), 3));
+    const env = await makeEnv([provider]);
+    const { body } = await env.submit("local", [search()]);
+    const r = await env.result(body.job_id);
+    assert.equal(r.searches[0].status, "failed");
+    assert.equal(r.searches[0].items, undefined);
+    assert.match(r.searches[0].errors[0].error, /omitted 1 result id/);
+    assert.equal(r.counts.failed, 1);
+    assert.equal(r.findability_score, null);
+  });
+
+  test("pinned provider unavailable -> exhausted, and no fall-through to another provider", async () => {
+    const pinned = fakeProvider("pinned", { kind: "geminiQuota" });
+    const { provider: other, calls: otherCalls } = answering("other", (ids) => allIn(ids, 3));
+    const env = await makeEnv([pinned, other]);
+    const { body } = await env.submit("pinned", [search()]);
+    const r = await env.result(body.job_id);
+    assert.equal(r.searches[0].status, "failed");
+    const call = env.db.prepare(`SELECT status FROM calls WHERE id = ?`).get(body.call_ids[0]);
+    assert.equal(call.status, "exhausted");
+    const attempts = env.db.prepare(`SELECT provider_id FROM attempts WHERE call_id = ?`).all(body.call_ids[0]);
+    assert.deepEqual(attempts.map((a) => a.provider_id), ["pinned"]);
+    assert.equal(otherCalls.length, 0);
+  });
+});
+
+describe("cache and windowing", () => {
+  test("second identical submit is served from cache with 0 new calls", async () => {
+    const { provider, calls } = answering("local", (ids) => allIn(ids, 3));
+    const env = await makeEnv([provider]);
+    const first = await env.submit("local", [search()]);
+    assert.equal(first.body.cache.misses, 1);
+    const r1 = await env.result(first.body.job_id);
+    assert.equal(calls.length, 1);
+    const second = await env.submit("local", [search()]);
+    assert.equal(second.body.status, "complete");
+    assert.equal(second.body.cache.hits, 1);
+    assert.deepEqual(second.body.call_ids, []);
+    const r2 = await env.result(second.body.job_id);
+    assert.equal(calls.length, 1, "no new model call");
+    assert.deepEqual(r2.searches[0].items, r1.searches[0].items);
+    assert.equal(env.db.prepare(`SELECT COUNT(*) n FROM calls`).get().n, 1);
+  });
+
+  test("30 items with window 20 -> 2 calls (overlap 5), groups reconciled by id", async () => {
+    assert.deepEqual(splitWindows(items(30), 20).map((w) => [w[0].id, w.length]), [["p1", 20], ["p16", 15]]);
+    // p16 is in both windows; p25 only in window 2. They are variants of one product.
+    const { provider, calls } = answering("local", (ids) => {
+      const variants = ids.filter((i) => i === "p16" || i === "p25");
+      const groups = singles(ids.filter((i) => !variants.includes(i)), () => 1).map((g) => ({ ...g, group_id: `g-${g.item_ids[0]}` }));
+      if (variants.length) groups.push({ group_id: "v", item_ids: variants, grade: 3, reason: "variants" });
+      return verdict(groups);
+    });
+    const env = await makeEnv([provider]);
+    const { body } = await env.submit("local", [search({ results: items(30) })]);
+    const r = await env.result(body.job_id);
+    assert.equal(calls.length, 2);
+    assert.equal(r.searches[0].windows, 2);
+    assert.equal(r.searches[0].items.length, 30);
+    const byId = Object.fromEntries(r.searches[0].items.map((i) => [i.id, i]));
+    assert.equal(byId.p16.grade, 3);
+    assert.equal(byId.p25.grade, 3, "p25 only appears in window 2 but joins the p16 variant group");
+    assert.equal(byId.p16.group_id, byId.p25.group_id);
+    assert.equal(r.searches[0].window_conflicts, 0);
+  });
+});
+
+describe("anthropic adapter", () => {
+  const provider = { id: "claude-haiku", kind: "anthropic", baseUrl: "https://api.anthropic.test", model: "claude-haiku-5-5", apiKeyEnv: "ANTHROPIC_API_KEY" };
+
+  test("request body has an image block when image_url is set; key is read from env, sent only as a header, never recorded", async () => {
+    const realFetch = globalThis.fetch;
+    process.env.ANTHROPIC_API_KEY = "test-key-NOT-REAL-123456";
+    let seen;
+    globalThis.fetch = async (url, init) => {
+      seen = { url, init };
+      return new Response(JSON.stringify({ model: "claude-haiku-5-5", content: [{ type: "text", text: "{}" }], usage: { input_tokens: 5, output_tokens: 2 }, stop_reason: "end_turn" }), { status: 200 });
+    };
+    try {
+      const out = await callAnthropic({
+        provider, prompt: "grade", systemPrompt: "SYS",
+        params: { maxTokens: 100, images: [{ id: "p1", url: "https://img.example.test/a.png" }] },
+      });
+      assert.equal(seen.url, "https://api.anthropic.test/v1/messages");
+      assert.equal(seen.init.headers["x-api-key"], "test-key-NOT-REAL-123456");
+      assert.equal(seen.init.headers["anthropic-version"], "2023-06-01");
+      const body = JSON.parse(seen.init.body);
+      assert.equal(body.system, "SYS");
+      assert.ok(body.messages[0].content.some((b) => b.type === "image" && b.source.type === "url" && b.source.url === "https://img.example.test/a.png"));
+      assert.equal(JSON.stringify(out.requestPayload).includes("test-key-NOT-REAL"), false, "key never reaches the recorded payload");
+      assert.equal(out.text, "{}");
+
+      await callAnthropic({ provider, prompt: "grade", systemPrompt: "SYS", params: {} });
+      assert.equal(JSON.parse(seen.init.body).messages[0].content.some((b) => b.type === "image"), false, "no image_url -> no image block");
+
+      globalThis.fetch = async () => new Response('{"error":{"type":"overloaded_error"}}', { status: 529 });
+      await assert.rejects(callAnthropic({ provider, prompt: "g", params: {} }), (err) => {
+        assert.equal(err.failureKind, "availability");
+        assert.equal(err.message.includes("test-key-NOT-REAL"), false);
+        return true;
+      });
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.ANTHROPIC_API_KEY;
+    }
+  });
+
+  test("a missing key is an availability failure; Anthropic providers are never in the fallback chain", async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    await assert.rejects(callAnthropic({ provider, prompt: "g", params: {} }), (err) => err.failureKind === "availability");
+    const config = loadConfig();
+    assert.ok(!config.providers.some((p) => p.kind === "anthropic"), "paid models never join the chain");
+    assert.deepEqual(config.pinnedProviders.map((p) => p.id), ["claude-haiku", "claude-sonnet"]);
+    assert.ok(config.pinnedProviders.every((p) => p.costPer1kInputUsd === 0 && p.costPer1kOutputUsd === 0));
+  });
+});

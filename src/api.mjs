@@ -19,6 +19,10 @@ import { providerHealth } from "./providers/index.mjs";
 import { providerAvailable } from "./config.mjs";
 import { buildRelevanceJob, buildJudgePrompt, parseJudgment, ndcgForJudgments, buildJudgeSystemPrompt, rubricHash } from "./relevance.mjs";
 import { computeJudgmentKey, lookupJudgment, storeJudgment, judgeModelScope, judgmentCacheStats, clearJudgmentCache } from "./cache.mjs";
+import {
+  RESULT_TYPES, DEFAULT_WINDOW, buildSearchEvalSystemPrompt, searchEvalRubricHash, splitWindows,
+  buildSearchEvalPrompt, parseSearchEval, reconcileWindows, buildScorecard, summarizeScores,
+} from "./search-eval.mjs";
 import { storageStats, prune, prunablePreview } from "./maintenance.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -446,6 +450,236 @@ export function createApi(db, config) {
         scored_queries: scored.length,
         unscored_queries: results.length - scored.length,
         failures,
+      });
+    },
+
+    /**
+     * Listwise search evaluation: one model call grades a whole ranked result list (per window).
+     * `provider` is REQUIRED and PINNED - no fall-through - so a run is one known model, and
+     * `rubric` is REQUIRED (never the hardware default). See src/search-eval.mjs.
+     */
+    "POST /v1/search-eval": async (req, res) => {
+      const body = await readBody(req);
+      const allowed = new Set(["client", "provider", "rubric", "searches", "params", "min_context_window", "fresh"]);
+      if (!rejectUnknownFields(body, allowed, res)) return;
+      if (!body.client || typeof body.client !== "string") return json(res, 400, { error: "client is required" });
+
+      if (typeof body.rubric !== "string" || !body.rubric.trim()) {
+        return json(res, 400, { error: "rubric is required: a non-empty string of domain judging criteria (no default rubric is applied to a search evaluation)" });
+      }
+      if (body.rubric.length > 20_000) return json(res, 400, { error: "rubric too large (max 20000 chars)" });
+
+      if (typeof body.provider !== "string" || !body.provider) {
+        return json(res, 400, { error: "provider is required (a provider id); a search evaluation is pinned to one model with no fallback" });
+      }
+      const known = [...config.providers, ...(config.pinnedProviders ?? [])];
+      const provider = known.find((p) => p.id === body.provider);
+      if (!provider) {
+        return json(res, 400, { error: `unknown provider "${body.provider}". Known: ${known.map((p) => p.id).join(", ")}` });
+      }
+      if (!providerAvailable(provider)) {
+        return json(res, 400, { error: `provider "${provider.id}" is not available: missing ${provider.apiKeyEnv}` });
+      }
+
+      const params = body.params ?? {};
+      if (typeof params !== "object" || Array.isArray(params)) return json(res, 400, { error: "params must be an object" });
+      const unknownParams = Object.keys(params).filter((k) => !["window", "maxTokens", "temperature"].includes(k));
+      if (unknownParams.length) return json(res, 400, { error: `unrecognised params: ${unknownParams.join(", ")}. Allowed: window, maxTokens, temperature` });
+      const windowSize = params.window ?? DEFAULT_WINDOW;
+      if (!Number.isInteger(windowSize) || windowSize < 6 || windowSize > 100) {
+        return json(res, 400, { error: "params.window must be an integer from 6 to 100" });
+      }
+
+      if (!Array.isArray(body.searches) || body.searches.length === 0 || body.searches.length > 500) {
+        return json(res, 400, { error: "searches must be an array of 1 to 500 searches" });
+      }
+      const text = (v, max) => typeof v === "string" && v.trim().length > 0 && v.length <= max;
+      const seenSearchIds = new Set();
+      const searches = [];
+      for (const [i, s] of body.searches.entries()) {
+        if (!s || !s.search_id || typeof s.search_id !== "string") {
+          return json(res, 400, { error: `searches[${i}] needs a stable string search_id (the scorecard join key)` });
+        }
+        if (seenSearchIds.has(s.search_id)) return json(res, 400, { error: `duplicate search_id "${s.search_id}"` });
+        seenSearchIds.add(s.search_id);
+        if (!text(s.query, 500)) return json(res, 400, { error: `searches[${i}].query must be a non-empty string (max 500 chars)` });
+        if (s.task !== undefined && s.task !== null && !text(s.task, 1000)) return json(res, 400, { error: `searches[${i}].task must be a non-empty string (max 1000 chars)` });
+        if (s.interpretations !== undefined && !(Array.isArray(s.interpretations) && s.interpretations.length <= 20 && s.interpretations.every((x) => text(x, 100)))) {
+          return json(res, 400, { error: `searches[${i}].interpretations must be an array of short strings` });
+        }
+        if (s.applicable_ids !== undefined && !(Array.isArray(s.applicable_ids) && s.applicable_ids.length <= 500 && s.applicable_ids.every((x) => text(x, 200)))) {
+          return json(res, 400, { error: `searches[${i}].applicable_ids must be an array of id strings (empty or absent = unknown)` });
+        }
+        if (!Array.isArray(s.results) || s.results.length === 0 || s.results.length > 500) {
+          return json(res, 400, { error: `searches[${i}].results must be an array of 1 to 500 results` });
+        }
+        const seenIds = new Set();
+        const seenPositions = new Set();
+        const results = [];
+        for (const [j, r] of s.results.entries()) {
+          const at = `searches[${i}].results[${j}]`;
+          if (!r || !text(r.id, 200)) return json(res, 400, { error: `${at} needs a stable string id` });
+          if (seenIds.has(r.id)) return json(res, 400, { error: `searches[${i}] has a duplicate result id "${r.id}"` });
+          seenIds.add(r.id);
+          if (!RESULT_TYPES.includes(r.type)) return json(res, 400, { error: `${at}.type must be one of ${RESULT_TYPES.join("|")}` });
+          if (!text(r.title, 500)) return json(res, 400, { error: `${at}.title must be a non-empty string (max 500 chars)` });
+          if (r.description != null && !(typeof r.description === "string" && r.description.length <= 5000)) return json(res, 400, { error: `${at}.description must be a string (max 5000 chars)` });
+          if (r.attributes != null) {
+            const ok = typeof r.attributes === "object" && !Array.isArray(r.attributes) && Object.keys(r.attributes).length <= 50 &&
+              Object.values(r.attributes).every((v) => ["string", "number", "boolean"].includes(typeof v) && String(v).length <= 500);
+            if (!ok) return json(res, 400, { error: `${at}.attributes must be a flat object of short scalar values (max 50 keys)` });
+          }
+          if (r.image_url != null) {
+            let u;
+            try { u = new URL(r.image_url); } catch { u = null; }
+            const host = u?.hostname ?? "";
+            const privateHost = /^(localhost|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|0\.|\[?::1\]?$)/i.test(host) || host.endsWith(".local");
+            if (!u || !["http:", "https:"].includes(u.protocol) || privateHost || String(r.image_url).length > 2000) {
+              return json(res, 400, { error: `${at}.image_url must be a public http(s) URL` });
+            }
+          }
+          if (r.event_date != null && !(typeof r.event_date === "string" && r.event_date.length <= 40)) return json(res, 400, { error: `${at}.event_date must be a short string or null` });
+          const position = r.position ?? j + 1;
+          if (!Number.isInteger(position) || position < 1) return json(res, 400, { error: `${at}.position must be a positive integer` });
+          if (seenPositions.has(position)) return json(res, 400, { error: `searches[${i}] has a duplicate position ${position}` });
+          seenPositions.add(position);
+          results.push({ id: r.id, position, type: r.type, title: r.title, description: r.description ?? null, attributes: r.attributes ?? {}, image_url: r.image_url ?? null, event_date: r.event_date ?? null });
+        }
+        results.sort((a, b) => a.position - b.position);
+        searches.push({ search_id: s.search_id, query: s.query, task: s.task ?? null, interpretations: s.interpretations ?? [], applicable_ids: s.applicable_ids ?? [], results });
+      }
+
+      const systemPrompt = buildSearchEvalSystemPrompt(body.rubric);
+      const rubric_hash = searchEvalRubricHash(body.rubric);
+      const effectiveParams = {
+        temperature: params.temperature ?? 0,
+        maxTokens: params.maxTokens ?? 4096,
+        responseFormat: { type: "json_object" },
+        pin_provider: provider.id,
+      };
+      const modelScope = judgeModelScope({ providers: [provider] });
+      const bypassCache = body.fresh === true;
+
+      // One window = one call = one cache entry. A cache hit stores the whole parsed answer.
+      const windows = [];
+      const calls = [];
+      let hits = 0;
+      for (const s of searches) {
+        const parts = splitWindows(s.results, windowSize);
+        parts.forEach((items, w) => {
+          const { prompt, images } = buildSearchEvalPrompt({ search: s, items, windowIndex: w, windowCount: parts.length });
+          const callParams = { ...effectiveParams, ...(images.length ? { images } : {}) };
+          const cache_key = computeJudgmentKey({ prompt, systemPrompt, params: callParams, modelScope });
+          const hit = bypassCache ? null : lookupJudgment(db, cache_key);
+          const win = { search_id: s.search_id, index: w, ids: items.map((r) => r.id), cache_key, call_index: null, cached: null };
+          let cachedParse = null;
+          if (hit) {
+            try { cachedParse = JSON.parse(hit.reason); } catch { cachedParse = null; }
+          }
+          if (cachedParse) {
+            hits += 1;
+            win.cached = { parse: cachedParse, source_trace_id: hit.source_trace_id, model: hit.model };
+          } else {
+            win.call_index = calls.length;
+            calls.push({ prompt, system_prompt: systemPrompt, params: callParams, min_context_window: body.min_context_window });
+          }
+          windows.push(win);
+        });
+      }
+
+      const cacheSummary = { hits, misses: calls.length, bypassed: bypassCache };
+      const { jobId, callIds } = queue.submitJob({
+        client: body.client,
+        purpose: "search_eval",
+        calls,
+        metadata: {
+          kind: "search_eval",
+          provider: provider.id,
+          model: provider.model,
+          rubric_hash,
+          cache: cacheSummary,
+          windows,
+          searches: searches.map((s) => ({
+            search_id: s.search_id, query: s.query, applicable_ids: s.applicable_ids,
+            results: s.results.map((r) => ({ id: r.id, position: r.position })),
+          })),
+        },
+      });
+      return json(res, 202, {
+        job_id: jobId,
+        call_ids: callIds,
+        trace_ids: callIds,
+        status: calls.length ? "queued" : "complete",
+        provider: provider.id,
+        model: provider.model,
+        rubric_hash,
+        cache: cacheSummary,
+        note: `Poll GET /v1/search-eval/${jobId} for scorecards. ${hits} of ${hits + calls.length} window(s) served from cache.`,
+      });
+    },
+
+    "GET /v1/search-eval/:id": async (req, res, { id }) => {
+      const job = queue.getJob(id);
+      if (!job) return json(res, 404, { error: "unknown job id" });
+      const md = job.metadata ?? {};
+      if (md.kind !== "search_eval") return json(res, 400, { error: "job is not a search-eval job" });
+
+      // Resolve every window to a parsed answer (cache or trace), a failure, or pending.
+      const perSearch = new Map(md.searches.map((s) => [s.search_id, { meta: s, windows: [] }]));
+      for (const w of md.windows) {
+        const entry = perSearch.get(w.search_id);
+        if (w.cached) {
+          entry.windows.push({ parse: w.cached.parse, trace_id: w.cached.source_trace_id, model: w.cached.model, from_cache: true });
+          continue;
+        }
+        const cid = job.call_ids[w.call_index];
+        const t = getTrace(db, cid);
+        if (t.status === "queued" || t.status === "executing") { entry.windows.push({ trace_id: cid, pending: true }); continue; }
+        if (t.status !== "succeeded") {
+          entry.windows.push({ trace_id: cid, error: t.error?.message ?? t.status, status: t.status });
+          continue;
+        }
+        try {
+          const parse = parseSearchEval(t.output, w.ids);
+          const model = t.resolved_by?.model ?? null;
+          // Write-through (parseable answers only; INSERT OR IGNORE so repeated polls are safe).
+          // judgment_cache.grade is a NOT NULL placeholder here; the parsed answer lives in `reason`.
+          storeJudgment(db, { key: w.cache_key, grade: 0, reason: JSON.stringify(parse), sourceTraceId: cid, model, now: Date.now() });
+          entry.windows.push({ parse, trace_id: cid, model, from_cache: false });
+        } catch (err) {
+          entry.windows.push({ trace_id: cid, error: err.message, status: "unparseable" });
+        }
+      }
+
+      const scorecards = [];
+      for (const { meta, windows } of perSearch.values()) {
+        const base = {
+          search_id: meta.search_id, query: meta.query,
+          provider: md.provider, model: md.model, rubric_hash: md.rubric_hash,
+          trace_ids: windows.map((w) => w.trace_id), windows: windows.length,
+        };
+        const errors = windows.filter((w) => w.error);
+        if (errors.length) {
+          scorecards.push({ ...base, status: "failed", score_0_100: null, errors: errors.map((e) => ({ trace_id: e.trace_id, status: e.status, error: e.error })) });
+        } else if (windows.some((w) => w.pending)) {
+          scorecards.push({ ...base, status: "pending", score_0_100: null });
+        } else {
+          const reconciled = reconcileWindows(windows.map((w) => w.parse));
+          const card = buildScorecard({ results: meta.results, applicable: meta.applicable_ids, reconciled });
+          scorecards.push({ ...base, status: "scored", ...card });
+        }
+      }
+
+      return json(res, 200, {
+        job_id: id,
+        status: job.status,
+        counts_calls: job.counts,
+        provider: md.provider,
+        model: md.model,
+        rubric_hash: md.rubric_hash,
+        cache: md.cache,
+        ...summarizeScores(scorecards),
+        searches: scorecards,
       });
     },
 

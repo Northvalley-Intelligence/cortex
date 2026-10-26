@@ -1,7 +1,9 @@
 import { callOllama, ollamaHealth } from "./ollama.mjs";
 import { callOpenAiCompatible, openAiCompatibleHealth } from "./openai-compatible.mjs";
+import { callAnthropic, anthropicHealth } from "./anthropic.mjs";
 
 const ADAPTERS = {
+  anthropic: { call: callAnthropic, health: anthropicHealth },
   ollama: { call: callOllama, health: ollamaHealth },
   openai_compatible: { call: callOpenAiCompatible, health: openAiCompatibleHealth },
 };

@@ -106,9 +106,37 @@ export class Executor {
    * would erase the difference between "the service was down" and "the prompt was bad".
    */
   async execute(call) {
-    const providers = this.#config.providers;
+    // pin_provider (in the call's params): ONLY that provider is tried, never a fall-through.
+    // Without it the chain silently mixed three models in one run (the BGE defect), so a
+    // caller that needs one known model names it and an outage fails the call instead.
+    const pin = call.params?.pin_provider ?? null;
+    const known = [...this.#config.providers, ...(this.#config.pinnedProviders ?? [])];
+    const providers = pin ? known.filter((p) => p.id === pin) : this.#config.providers;
     const minWindow = call.min_context_window;
-    const eligible = eligibleProviders(providers, minWindow);
+
+    if (pin && providers.length === 0) {
+      return {
+        status: "failed",
+        errorCode: "unknown_pinned_provider",
+        errorMessage: `pin_provider "${pin}" is not a configured provider. Known: ${known.map((p) => p.id).join(", ")}.`,
+        providerId: null,
+        model: null,
+      };
+    }
+    if (pin && !providerAvailable(providers[0])) {
+      // No key is an availability failure of the one provider asked for; with a pin there is
+      // nowhere to fall through to, so the call is exhausted rather than quietly rerouted.
+      return {
+        status: "exhausted",
+        errorCode: "providers_exhausted",
+        errorMessage: `Pinned provider ${pin} is unavailable (missing ${providers[0].apiKeyEnv}); no fallback is attempted for a pinned call.`,
+        providerId: null,
+        model: null,
+      };
+    }
+    const eligible = pin
+      ? providers.filter((p) => p.effectiveContextWindow >= minWindow)
+      : eligibleProviders(providers, minWindow);
 
     if (eligible.length === 0) {
       const err = new ContextFloorError(
