@@ -9,6 +9,7 @@ import { loadConfig } from "../src/config.mjs";
 import { createApi } from "../src/api.mjs";
 import { Worker } from "../src/worker.mjs";
 import { fakeProvider } from "./helpers/fake-provider.mjs";
+import { ProviderError } from "../src/failures.mjs";
 import { callAnthropic } from "../src/providers/anthropic.mjs";
 import { SCORE_WEIGHTS, splitWindows } from "../src/search-eval.mjs";
 
@@ -277,7 +278,81 @@ describe("anthropic adapter", () => {
     await assert.rejects(callAnthropic({ provider, prompt: "g", params: {} }), (err) => err.failureKind === "availability");
     const config = loadConfig();
     assert.ok(!config.providers.some((p) => p.kind === "anthropic"), "paid models never join the chain");
-    assert.deepEqual(config.pinnedProviders.map((p) => p.id), ["claude-haiku", "claude-sonnet"]);
-    assert.ok(config.pinnedProviders.every((p) => p.costPer1kInputUsd === 0 && p.costPer1kOutputUsd === 0));
+    assert.deepEqual(config.pinnedProviders.map((p) => p.id), ["claude-haiku", "claude-sonnet", "local-vision"]);
+  });
+
+  const withFetch = async (reply, fn) => {
+    const realFetch = globalThis.fetch;
+    process.env.ANTHROPIC_API_KEY = "test-key-NOT-REAL-123456";
+    let seen;
+    globalThis.fetch = async (url, init) => { seen = JSON.parse(init.body); return new Response(JSON.stringify(reply), { status: 200 }); };
+    try { return await fn(() => seen); } finally { globalThis.fetch = realFetch; delete process.env.ANTHROPIC_API_KEY; }
+  };
+  const okReply = { model: "claude-haiku-5-5", content: [{ type: "thinking", thinking: "x" }, { type: "text", text: "{}" }], usage: { input_tokens: 1, output_tokens: 1 }, stop_reason: "end_turn" };
+
+  test("body never has temperature/top_p/top_k; effort is passed through and defaults to medium; max_tokens defaults 16000", async () => {
+    await withFetch(okReply, async (seen) => {
+      const out = await callAnthropic({ provider, prompt: "g", params: { temperature: 0.7, top_p: 0.5, top_k: 3, effort: "high" } });
+      assert.equal(out.text, "{}", "thinking blocks are ignored");
+      for (const k of ["temperature", "top_p", "top_k"]) assert.equal(k in seen(), false);
+      assert.deepEqual(seen().output_config, { effort: "high" });
+      await callAnthropic({ provider, prompt: "g", params: {} });
+      assert.deepEqual(seen().output_config, { effort: "medium" });
+      assert.equal(seen().max_tokens, 16000);
+    });
+  });
+
+  test("refusal is a content failure naming the category", async () => {
+    await withFetch({ ...okReply, stop_reason: "refusal", stop_details: { category: "cyber" } }, async () => {
+      await assert.rejects(callAnthropic({ provider, prompt: "g", params: {} }), (err) => {
+        assert.equal(err.failureKind, "content");
+        assert.match(err.message, /cyber/);
+        return true;
+      });
+    });
+  });
+
+  test("invalid params.effort -> 400; valid effort reaches the adapter and changes the cache key", async () => {
+    const { provider: p, calls } = answering("local", (ids) => allIn(ids, 3));
+    const env = await makeEnv([p]);
+    const bad = await env.submit("local", [search()], { params: { effort: "turbo" } });
+    assert.equal(bad.status, 400);
+    assert.match(bad.body.error, /effort/);
+    const hi = await env.submit("local", [search()], { params: { effort: "high" } });
+    await env.result(hi.body.job_id);
+    assert.equal(calls[0].params.effort, "high");
+    const lo = await env.submit("local", [search()], { params: { effort: "low" } });
+    assert.equal(lo.body.cache.hits, 0, "different effort is a different cache entry");
+  });
+
+  test("refusal ends the search as failed with no grade", async () => {
+    const refusing = fakeProvider("local", { kind: "ok" }, {
+      __adapter: async () => { throw new ProviderError("local: model refused (cyber)", { failureKind: "content", provider: "local" }); },
+    });
+    const env = await makeEnv([refusing]);
+    const { body } = await env.submit("local", [search()]);
+    const r = await env.result(body.job_id);
+    assert.equal(r.searches[0].status, "failed");
+    assert.equal(r.findability_score, null);
+  });
+
+  test("pinned Haiku pricing records cost: 1000 in / 1000 out = 0.0006 USD", async () => {
+    const haiku = loadConfig().pinnedProviders.find((p) => p.id === "claude-haiku");
+    const sonnet = loadConfig().pinnedProviders.find((p) => p.id === "claude-sonnet");
+    assert.ok(Math.abs(haiku.costPer1kInputUsd + haiku.costPer1kOutputUsd - 0.0006) < 1e-12);
+    assert.ok(Math.abs(sonnet.costPer1kInputUsd + sonnet.costPer1kOutputUsd - 0.012) < 1e-12);
+    const local = fakeProvider("local", { kind: "ok" }, {
+      __adapter: async ({ provider, prompt }) => ({
+        text: JSON.stringify(allIn(idsIn(prompt), 3)), evaluatedTokens: 1000, completionTokens: 1000,
+        requestedNumCtx: null, truncationDetected: false, providerVersion: provider.model, requestPayload: {},
+      }),
+    });
+    local.costPer1kInputUsd = haiku.costPer1kInputUsd;
+    local.costPer1kOutputUsd = haiku.costPer1kOutputUsd;
+    const env = await makeEnv([local]);
+    const { body } = await env.submit("local", [search()]);
+    await env.result(body.job_id);
+    const row = env.db.prepare(`SELECT cost_usd FROM attempts WHERE call_id = ?`).get(body.call_ids[0]);
+    assert.ok(Math.abs(row.cost_usd - 0.0006) < 1e-9, `cost ${row.cost_usd}`);
   });
 });

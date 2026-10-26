@@ -23,6 +23,7 @@ import {
   RESULT_TYPES, DEFAULT_WINDOW, buildSearchEvalSystemPrompt, searchEvalRubricHash, splitWindows,
   buildSearchEvalPrompt, parseSearchEval, reconcileWindows, buildScorecard, summarizeScores,
 } from "./search-eval.mjs";
+import { EFFORT_LEVELS } from "./providers/anthropic.mjs";
 import { storageStats, prune, prunablePreview } from "./maintenance.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -483,8 +484,11 @@ export function createApi(db, config) {
 
       const params = body.params ?? {};
       if (typeof params !== "object" || Array.isArray(params)) return json(res, 400, { error: "params must be an object" });
-      const unknownParams = Object.keys(params).filter((k) => !["window", "maxTokens", "temperature"].includes(k));
-      if (unknownParams.length) return json(res, 400, { error: `unrecognised params: ${unknownParams.join(", ")}. Allowed: window, maxTokens, temperature` });
+      const unknownParams = Object.keys(params).filter((k) => !["window", "maxTokens", "temperature", "effort"].includes(k));
+      if (unknownParams.length) return json(res, 400, { error: `unrecognised params: ${unknownParams.join(", ")}. Allowed: window, maxTokens, temperature, effort` });
+      if (params.effort !== undefined && !EFFORT_LEVELS.includes(params.effort)) {
+        return json(res, 400, { error: `params.effort must be one of ${EFFORT_LEVELS.join("|")}` });
+      }
       const windowSize = params.window ?? DEFAULT_WINDOW;
       if (!Number.isInteger(windowSize) || windowSize < 6 || windowSize > 100) {
         return json(res, 400, { error: "params.window must be an integer from 6 to 100" });
@@ -553,7 +557,8 @@ export function createApi(db, config) {
       const rubric_hash = searchEvalRubricHash(body.rubric);
       const effectiveParams = {
         temperature: params.temperature ?? 0,
-        maxTokens: params.maxTokens ?? 4096,
+        maxTokens: params.maxTokens ?? (provider.kind === "anthropic" ? 16000 : 4096),
+        effort: params.effort ?? "medium",
         responseFormat: { type: "json_object" },
         pin_provider: provider.id,
       };
