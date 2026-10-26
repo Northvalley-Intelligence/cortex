@@ -78,6 +78,39 @@ export const DEFAULT_PROVIDERS = [
   },
 ];
 
+/**
+ * Anthropic providers are PINNED-ONLY and therefore NOT in DEFAULT_PROVIDERS: a paid model must
+ * never be reachable by a fallback-chain fall-through (nor change the relevance cache scope),
+ * only by a call that names it via pin_provider (POST /v1/search-eval).
+ * Costs are 0 on purpose: set from the current Anthropic price sheet before any paid run.
+ */
+export const PINNED_PROVIDERS = [
+  {
+    id: "claude-haiku",
+    kind: "anthropic",
+    baseUrl: "https://api.anthropic.com",
+    model: "claude-haiku-5-5",
+    apiKeyEnv: "ANTHROPIC_API_KEY",
+    timeoutMs: 120_000,
+    effectiveContextWindow: 200_000,
+    costPer1kInputUsd: 0, // set from the current Anthropic price sheet before any paid run
+    costPer1kOutputUsd: 0, // set from the current Anthropic price sheet before any paid run
+    maxConcurrency: envInt("CORTEX_CLOUD_CONCURRENCY", 4),
+  },
+  {
+    id: "claude-sonnet",
+    kind: "anthropic",
+    baseUrl: "https://api.anthropic.com",
+    model: "claude-sonnet-5-5",
+    apiKeyEnv: "ANTHROPIC_API_KEY",
+    timeoutMs: 120_000,
+    effectiveContextWindow: 200_000,
+    costPer1kInputUsd: 0, // set from the current Anthropic price sheet before any paid run
+    costPer1kOutputUsd: 0, // set from the current Anthropic price sheet before any paid run
+    maxConcurrency: envInt("CORTEX_CLOUD_CONCURRENCY", 4),
+  },
+];
+
 export function loadConfig(overrides = {}) {
   const chainEnv = process.env.CORTEX_PROVIDER_CHAIN;
   let providers = DEFAULT_PROVIDERS;
@@ -89,6 +122,7 @@ export function loadConfig(overrides = {}) {
   }
   return {
     providers,
+    pinnedProviders: PINNED_PROVIDERS,
     port: envInt("CORTEX_PORT", 7077),
     dbPath: process.env.CORTEX_DB || "data/cortex.db",
     /** How long a call may be leased before it is considered abandoned and requeued. */

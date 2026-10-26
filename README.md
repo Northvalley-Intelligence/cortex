@@ -25,6 +25,23 @@ See `HANDOFF.md` for the full contract and per-caller retrofit guidance. Core en
 `POST /v1/calls`, `POST /v1/jobs`, `POST /v1/relevance`, `GET /v1/traces/:id`,
 `GET /v1/capabilities`, `GET /v1/metrics`, `GET /v1/health`.
 
+### `POST /v1/search-eval` (listwise search evaluation)
+
+Grades one search term against its whole ranked result list in a single model call (lists over
+`params.window`, default 20, are split into overlapping windows of 5). `GET /v1/search-eval/:id`
+returns the per-search scorecard (per-item grades aligned by id, `first_useful_position`,
+`coverage`, `head_complete`, `score_0_100`) and the job's `findability_score` plus
+`counts {works, failures, mixed, unresolved, failed}`.
+
+Body: `client`, `provider` (REQUIRED: a provider id; the call is pinned to it, no fall-through),
+`rubric` (REQUIRED, non-empty, max 20000 chars; no default is applied), `searches[]`
+(`search_id`, `query`, optional `task`, `interpretations`, `applicable_ids`, and `results[]` of
+`{id, position, type, title, description, attributes, image_url, event_date}`), optional
+`params` (`window`, `maxTokens`, `temperature`), `min_context_window`, `fresh`.
+`provider` may also be `claude-haiku` or `claude-sonnet` (needs `ANTHROPIC_API_KEY`; these are
+pinned-only and never join the fallback chain). The score weights are a draft in `SCORE_WEIGHTS`
+(`src/search-eval.mjs`).
+
 ## How it's built
 
 Zero runtime dependencies — Node's built-in `node:sqlite` and `node:http`. Durable queue and

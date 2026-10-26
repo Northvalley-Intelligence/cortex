@@ -19,7 +19,37 @@
  */
 import { ProviderError, TruncationError, FAILURE_AVAILABILITY } from "../failures.mjs";
 
+export const MAX_IMAGES_PER_CALL = 10;
+export const MAX_IMAGE_BYTES = 1_000_000;
+
+/**
+ * Fetch each params.images[{id,url}] and base64 it for a vision model. Capped at 10 images per
+ * call and 1 MB each; an image that cannot be fetched or is over the cap is SKIPPED and listed
+ * in the returned `skipped` (recorded in the trace), never silently pretended to be seen.
+ */
+async function loadImages(images, signal) {
+  const encoded = [];
+  const skipped = [];
+  for (const [i, img] of (images ?? []).entries()) {
+    if (i >= MAX_IMAGES_PER_CALL) {
+      skipped.push({ id: img.id, reason: `over the ${MAX_IMAGES_PER_CALL}-image cap` });
+      continue;
+    }
+    try {
+      const res = await fetch(img.url, { signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length > MAX_IMAGE_BYTES) throw new Error(`over ${MAX_IMAGE_BYTES} bytes`);
+      encoded.push(buf.toString("base64"));
+    } catch (err) {
+      skipped.push({ id: img.id, reason: err.message });
+    }
+  }
+  return { encoded, skipped };
+}
+
 export async function callOllama({ provider, prompt, systemPrompt, params, numCtx, signal }) {
+  const { encoded: images, skipped: imagesSkipped } = await loadImages(params.images, signal);
   const body = {
     model: provider.model,
     prompt,
@@ -33,6 +63,7 @@ export async function callOllama({ provider, prompt, systemPrompt, params, numCt
     keep_alive: "10m",
   };
   if (systemPrompt) body.system = systemPrompt;
+  if (images.length > 0) body.images = images;
   // Honour a JSON-mode request so the same call yields structured output on the local provider
   // too. Ollama takes format:"json"; the OpenAI-style response_format object maps to it.
   if (params.responseFormat?.type === "json_object" || params.responseFormat === "json") {
@@ -95,7 +126,12 @@ export async function callOllama({ provider, prompt, systemPrompt, params, numCt
     doneReason,
     outputTruncated: doneReason === "length",
     providerVersion: provider.model,
-    requestPayload: body,
+    // Base64 bodies are not persisted in the trace; only how many went out and what was skipped.
+    requestPayload: {
+      ...body,
+      ...(images.length > 0 ? { images: `<${images.length} image(s) base64, omitted>` } : {}),
+      ...(imagesSkipped.length > 0 ? { images_skipped: imagesSkipped } : {}),
+    },
   };
 }
 
