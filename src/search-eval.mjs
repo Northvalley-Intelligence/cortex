@@ -273,10 +273,10 @@ const tier = (tiers, value) => {
 
 /**
  * The 0-100 findability score for one search. Pure arithmetic over Cortex-computed facts.
- * Returns null for an unresolved intent (counted separately, never scored).
+ * Returns null for an unresolved intent with no useful result (counted separately, never scored).
  */
 export function computeScore({ items, firstUsefulPosition, coverage, headComplete, ranking, taskGuidance, intent }) {
-  if (intent === "unresolved") return null;
+  if (intent === "unresolved" && !items.some((i) => i.grade >= USEFUL_GRADE)) return null;
   const W = SCORE_WEIGHTS;
   const first = tier(W.first_useful_tiers, firstUsefulPosition);
   let cov;
@@ -291,18 +291,40 @@ export function computeScore({ items, firstUsefulPosition, coverage, headComplet
   if (taskGuidance === "not_needed") {
     return Math.round((base / (W.first_useful + W.coverage + W.ranking + W.effort)) * 1000) / 10;
   }
-  return Math.round((base + (W.task_guidance_points[taskGuidance] ?? 0)) * 10) / 10;
+  const total = Math.round((base + (W.task_guidance_points[taskGuidance] ?? 0)) * 10) / 10;
+  // A task that needed guidance and got none is never "works".
+  return taskGuidance === "missing" ? Math.min(total, SCORE_BANDS.works - 1) : total;
 }
 
 /**
  * Build one search's scorecard from its (ordered) result list and the reconciled grades.
- * `results` = [{id, position}], `applicable` = array|null (null/empty = unknown).
+ * `results` = [{id, position, type?, event_date?}], `asOf` = ISO date for the past-event cap, `applicable` = array|null (null/empty = unknown).
  */
-export function buildScorecard({ results, applicable, reconciled }) {
+export function buildScorecard({ results, applicable, reconciled, asOf }) {
+  const asOfMs = asOf ? Date.parse(asOf) : NaN;
+  const pastEventCapped = [];
+  const itemTypes = new Map();
   const items = results.map((r) => {
     const g = reconciled.byId.get(r.id);
-    return { id: r.id, position: r.position, grade: g.grade, reason: g.reason, group_id: g.group_id };
+    itemTypes.set(r.id, r.type);
+    let { grade, reason } = g;
+    if (r.type === "event" && r.event_date && Number.isFinite(asOfMs)) {
+      const eventMs = Date.parse(r.event_date);
+      if (Number.isFinite(eventMs) && eventMs < asOfMs) {
+        if (grade > 1) grade = 1;
+        reason = `${reason ?? ""} [past event: ${r.event_date}]`.trim();
+        pastEventCapped.push(r.id);
+      }
+    }
+    return { id: r.id, position: r.position, grade, reason, group_id: g.group_id };
   });
+  let taskGuidance = reconciled.task_guidance;
+  let guidanceCoerced = false;
+  if (taskGuidance === "met" || taskGuidance === "partial") {
+    const contentTypes = ["guide", "recipe", "page", "event"];
+    const served = items.some((i) => i.grade >= USEFUL_GRADE && contentTypes.includes(itemTypes.get(i.id)));
+    if (!served) { taskGuidance = "missing"; guidanceCoerced = true; }
+  }
   const useful = items.filter((i) => i.grade >= USEFUL_GRADE).map((i) => i.position);
   const firstUsefulPosition = useful.length ? Math.min(...useful) : null;
 
@@ -316,7 +338,7 @@ export function buildScorecard({ results, applicable, reconciled }) {
   }
   const score = computeScore({
     items, firstUsefulPosition, coverage, headComplete,
-    ranking: reconciled.ranking, taskGuidance: reconciled.task_guidance, intent: reconciled.intent,
+    ranking: reconciled.ranking, taskGuidance, intent: reconciled.intent,
   });
   return {
     items,
@@ -326,8 +348,11 @@ export function buildScorecard({ results, applicable, reconciled }) {
     head_complete: headComplete,
     ranking: reconciled.ranking,
     ranking_reason: reconciled.ranking_reason,
-    task_guidance: reconciled.task_guidance,
+    task_guidance: taskGuidance,
+    ...(guidanceCoerced ? { task_guidance_coerced: true } : {}),
     intent: reconciled.intent,
+    ...(reconciled.intent === "unresolved" && score !== null ? { ambiguous: true } : {}),
+    ...(pastEventCapped.length ? { past_event_capped: pastEventCapped } : {}),
     window_conflicts: reconciled.conflicts,
     score_0_100: score,
   };
