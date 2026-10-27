@@ -511,6 +511,7 @@ export function createApi(db, config) {
         seenSearchIds.add(s.search_id);
         if (!text(s.query, 500)) return json(res, 400, { error: `searches[${i}].query must be a non-empty string (max 500 chars)` });
         if (s.task !== undefined && s.task !== null && !text(s.task, 1000)) return json(res, 400, { error: `searches[${i}].task must be a non-empty string (max 1000 chars)` });
+        if (s.guidance_required !== undefined && typeof s.guidance_required !== "boolean") return json(res, 400, { error: `searches[${i}].guidance_required must be a boolean` });
         if (s.interpretations !== undefined && !(Array.isArray(s.interpretations) && s.interpretations.length <= 20 && s.interpretations.every((x) => text(x, 100)))) {
           return json(res, 400, { error: `searches[${i}].interpretations must be an array of short strings` });
         }
@@ -553,7 +554,7 @@ export function createApi(db, config) {
           results.push({ id: r.id, position, type: r.type, title: r.title, description: r.description ?? null, attributes: r.attributes ?? {}, image_url: r.image_url ?? null, event_date: r.event_date ?? null });
         }
         results.sort((a, b) => a.position - b.position);
-        searches.push({ search_id: s.search_id, query: s.query, task: s.task ?? null, interpretations: s.interpretations ?? [], applicable_ids: s.applicable_ids ?? [], results });
+        searches.push({ search_id: s.search_id, query: s.query, task: s.task ?? null, guidance_required: s.guidance_required, interpretations: s.interpretations ?? [], applicable_ids: s.applicable_ids ?? [], results });
       }
 
       const systemPrompt = buildSearchEvalSystemPrompt(body.rubric);
@@ -610,7 +611,7 @@ export function createApi(db, config) {
           windows,
           searches: searches.map((s) => ({
             search_id: s.search_id, query: s.query, applicable_ids: s.applicable_ids,
-            ...(s.guidance_required ? { guidance_required: true } : {}),
+            ...(s.guidance_required !== undefined ? { guidance_required: s.guidance_required } : {}),
             results: s.results.map((r) => ({
               id: r.id, position: r.position,
               ...(r.type ? { type: r.type } : {}), ...(r.event_date ? { event_date: r.event_date } : {}),

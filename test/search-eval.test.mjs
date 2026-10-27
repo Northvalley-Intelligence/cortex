@@ -92,6 +92,21 @@ describe("request validation", () => {
     assert.match(dup.body.error, /duplicate search_id/);
   });
 
+  test("guidance_required rejects non-booleans before submitting any jobs", async () => {
+    const { provider, calls } = answering("local", (ids) => allIn(ids, 3));
+    const env = await makeEnv([provider]);
+    for (const value of [null, "true", "false", 0, 1, [], {}]) {
+      const bad = await env.submit("local", [
+        search({ search_id: "valid" }), search({ guidance_required: value }),
+      ]);
+      assert.equal(bad.status, 400, `reject ${JSON.stringify(value)}`);
+      assert.deepEqual(bad.body, { error: "searches[1].guidance_required must be a boolean" });
+    }
+    assert.equal(env.db.prepare("SELECT COUNT(*) n FROM jobs").get().n, 0);
+    assert.equal(env.db.prepare("SELECT COUNT(*) n FROM calls").get().n, 0);
+    assert.equal(calls.length, 0);
+  });
+
   test("duplicate result id, bad type and a private image host are rejected", async () => {
     const { provider } = answering("local", (ids) => allIn(ids, 3));
     const env = await makeEnv([provider]);
@@ -401,6 +416,37 @@ describe("anthropic adapter", () => {
 });
 
 describe("grading guards (H16)", () => {
+  for (const flag of [true, false, undefined]) {
+    test(`API preserves guidance_required=${flag} for fresh and cached learning searches`, async () => {
+      const { provider, calls } = answering("local", (ids) => allIn(ids, 3));
+      const env = await makeEnv([provider]);
+      const learningSearch = search({
+        query: "learn to bake pizza",
+        task: "Learn how to bake pizza using a pizza stone",
+        ...(flag !== undefined ? { guidance_required: flag } : {}),
+      });
+      for (const cached of [false, true]) {
+        const { status, body } = await env.submit("local", [learningSearch]);
+        assert.equal(status, 202);
+        assert.equal(body.cache.hits, cached ? 1 : 0);
+        // Read the serialized job, not the submitted object: polling must survive normalization
+        // and durable metadata round-tripping even when no new provider call is needed.
+        const metadata = JSON.parse(env.db.prepare("SELECT metadata FROM jobs WHERE id = ?").get(body.job_id).metadata);
+        assert.equal(metadata.searches[0].guidance_required, flag);
+        assert.equal(Object.hasOwn(metadata.searches[0], "guidance_required"), flag !== undefined);
+        const result = await env.result(body.job_id);
+        const card = result.searches[0];
+        assert.equal(card.status, "scored");
+        assert.deepEqual(card.items.map((item) => item.grade), [3, 3, 3]);
+        assert.equal(card.task_guidance, flag === true ? "missing" : "met");
+        assert.equal(card.task_guidance_coerced === true, flag === true);
+        assert.equal(card.score_0_100, flag === true ? 69 : 100);
+        assert.equal(result.counts.works, flag === true ? 0 : 1);
+      }
+      assert.equal(calls.length, 1, "repeat uses the cached synthetic verdict");
+    });
+  }
+
   const AS_OF = "2026-06-01T00:00:00.000Z";
   const recon = (grades, over = {}) => ({
     byId: new Map(Object.entries(grades).map(([id, grade]) => [id, { group_id: `g-${id}`, grade, reason: "r" }])),
