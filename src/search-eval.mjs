@@ -275,7 +275,7 @@ const tier = (tiers, value) => {
  * The 0-100 findability score for one search. Pure arithmetic over Cortex-computed facts.
  * Returns null for an unresolved intent with no useful result (counted separately, never scored).
  */
-export function computeScore({ items, firstUsefulPosition, coverage, headComplete, ranking, taskGuidance, intent }) {
+export function computeScore({ items, firstUsefulPosition, coverage, headComplete, ranking, taskGuidance, intent, guidanceRequired = false }) {
   if (intent === "unresolved" && !items.some((i) => i.grade >= USEFUL_GRADE)) return null;
   const W = SCORE_WEIGHTS;
   const first = tier(W.first_useful_tiers, firstUsefulPosition);
@@ -293,14 +293,14 @@ export function computeScore({ items, firstUsefulPosition, coverage, headComplet
   }
   const total = Math.round((base + (W.task_guidance_points[taskGuidance] ?? 0)) * 10) / 10;
   // A task that needed guidance and got none is never "works".
-  return taskGuidance === "missing" ? Math.min(total, SCORE_BANDS.works - 1) : total;
+  return guidanceRequired && taskGuidance === "missing" ? Math.min(total, SCORE_BANDS.works - 1) : total;
 }
 
 /**
  * Build one search's scorecard from its (ordered) result list and the reconciled grades.
  * `results` = [{id, position, type?, event_date?}], `asOf` = ISO date for the past-event cap, `applicable` = array|null (null/empty = unknown).
  */
-export function buildScorecard({ results, applicable, reconciled, asOf }) {
+export function buildScorecard({ results, applicable, reconciled, asOf, guidanceRequired = false }) {
   const asOfMs = asOf ? Date.parse(asOf) : NaN;
   const pastEventCapped = [];
   const itemTypes = new Map();
@@ -320,7 +320,7 @@ export function buildScorecard({ results, applicable, reconciled, asOf }) {
   });
   let taskGuidance = reconciled.task_guidance;
   let guidanceCoerced = false;
-  if (taskGuidance === "met" || taskGuidance === "partial") {
+  if (guidanceRequired === true && (taskGuidance === "met" || taskGuidance === "partial")) {
     const contentTypes = ["guide", "recipe", "page", "event"];
     const served = items.some((i) => i.grade >= USEFUL_GRADE && contentTypes.includes(itemTypes.get(i.id)));
     if (!served) { taskGuidance = "missing"; guidanceCoerced = true; }
@@ -338,7 +338,7 @@ export function buildScorecard({ results, applicable, reconciled, asOf }) {
   }
   const score = computeScore({
     items, firstUsefulPosition, coverage, headComplete,
-    ranking: reconciled.ranking, taskGuidance, intent: reconciled.intent,
+    ranking: reconciled.ranking, taskGuidance, guidanceRequired: guidanceRequired === true, intent: reconciled.intent,
   });
   return {
     items,
