@@ -610,7 +610,11 @@ export function createApi(db, config) {
           windows,
           searches: searches.map((s) => ({
             search_id: s.search_id, query: s.query, applicable_ids: s.applicable_ids,
-            results: s.results.map((r) => ({ id: r.id, position: r.position })),
+            ...(s.guidance_required ? { guidance_required: true } : {}),
+            results: s.results.map((r) => ({
+              id: r.id, position: r.position,
+              ...(r.type ? { type: r.type } : {}), ...(r.event_date ? { event_date: r.event_date } : {}),
+            })),
           })),
         },
       });
@@ -674,7 +678,7 @@ export function createApi(db, config) {
           scorecards.push({ ...base, status: "pending", score_0_100: null });
         } else {
           const reconciled = reconcileWindows(windows.map((w) => w.parse));
-          const card = buildScorecard({ results: meta.results, applicable: meta.applicable_ids, reconciled });
+          const card = buildScorecard({ results: meta.results, applicable: meta.applicable_ids, reconciled, asOf: new Date(job.submitted_at).toISOString(), guidanceRequired: meta.guidance_required === true });
           scorecards.push({ ...base, status: "scored", ...card });
         }
       }

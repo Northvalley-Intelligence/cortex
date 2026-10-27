@@ -12,7 +12,7 @@ import { fakeProvider } from "./helpers/fake-provider.mjs";
 import { ProviderError } from "../src/failures.mjs";
 import { SEARCH_EVAL_OUTPUT_SCHEMA } from "../src/search-eval.mjs";
 import { callAnthropic } from "../src/providers/anthropic.mjs";
-import { SCORE_WEIGHTS, splitWindows } from "../src/search-eval.mjs";
+import { SCORE_WEIGHTS, splitWindows, buildScorecard } from "../src/search-eval.mjs";
 
 const idsIn = (prompt) => [...prompt.matchAll(/\[id=([^\]]+)\]/g)].map((m) => m[1]);
 
@@ -397,5 +397,83 @@ describe("anthropic adapter", () => {
     await env.result(body.job_id);
     const row = env.db.prepare(`SELECT cost_usd FROM attempts WHERE call_id = ?`).get(body.call_ids[0]);
     assert.ok(Math.abs(row.cost_usd - 0.0006) < 1e-9, `cost ${row.cost_usd}`);
+  });
+});
+
+describe("grading guards (H16)", () => {
+  const AS_OF = "2026-06-01T00:00:00.000Z";
+  const recon = (grades, over = {}) => ({
+    byId: new Map(Object.entries(grades).map(([id, grade]) => [id, { group_id: `g-${id}`, grade, reason: "r" }])),
+    conflicts: 0, ranking: "optimal", ranking_reason: null, task_guidance: "met", intent: "resolved",
+    model_first_useful_position: 1, ...over,
+  });
+  const card = (results, grades, over, guidanceRequired, asOf = AS_OF) =>
+    buildScorecard({ results, applicable: null, reconciled: recon(grades, over), asOf, guidanceRequired });
+  const product = [{ id: "p1", position: 1, type: "product" }];
+
+  test("A: met guidance with products only is coerced to missing and capped at 69", () => {
+    const c = card(product, { p1: 3 }, {}, true);
+    assert.equal(c.task_guidance, "missing");
+    assert.equal(c.task_guidance_coerced, true);
+    assert.equal(c.score_0_100, 69);
+  });
+
+  test("B: model-reported missing guidance is capped at 69, not coerced", () => {
+    const c = card(product, { p1: 3 }, { task_guidance: "missing" }, true);
+    assert.equal(c.score_0_100, 69);
+    assert.ok(!c.task_guidance_coerced);
+  });
+
+  test("C: a past event is capped at grade 1 and does not satisfy guidance", () => {
+    const c = card([{ id: "e1", position: 1, type: "event", event_date: "2026-01-15" }], { e1: 3 }, {}, true);
+    assert.equal(c.items[0].grade, 1);
+    assert.ok(c.items[0].reason.endsWith("[past event: 2026-01-15]"));
+    assert.deepEqual(c.past_event_capped, ["e1"]);
+    assert.equal(c.task_guidance, "missing");
+    assert.equal(c.task_guidance_coerced, true);
+  });
+
+  test("D: a future event keeps its grade and satisfies guidance", () => {
+    const c = card([{ id: "e1", position: 1, type: "event", event_date: "2026-12-15" }], { e1: 3 }, {}, true);
+    assert.equal(c.items[0].grade, 3);
+    assert.equal(c.past_event_capped, undefined);
+    assert.equal(c.task_guidance, "met");
+    assert.ok(!c.task_guidance_coerced);
+  });
+
+  test("E: unresolved intent with a useful item is scored and flagged ambiguous", () => {
+    const c = card(product, { p1: 3 }, { intent: "unresolved", task_guidance: "not_needed" });
+    assert.equal(typeof c.score_0_100, "number");
+    assert.equal(c.ambiguous, true);
+  });
+
+  test("F: unresolved intent with nothing useful stays null", () => {
+    const c = card(product, { p1: 1 }, { intent: "unresolved" });
+    assert.equal(c.score_0_100, null);
+  });
+
+  test("G: not_needed guidance keeps the rescale path", () => {
+    const c = card(product, { p1: 3 }, { task_guidance: "not_needed" });
+    assert.equal(c.score_0_100, 100);
+  });
+
+  test("H: a graded guide satisfies guidance with no coercion or cap", () => {
+    const c = card([{ id: "g1", position: 1, type: "guide" }], { g1: 3 }, {}, true);
+    assert.equal(c.task_guidance, "met");
+    assert.ok(!c.task_guidance_coerced);
+    assert.equal(c.score_0_100, 100);
+  });
+
+  test("I: product-only met without guidanceRequired is untouched (100)", () => {
+    const c = card(product, { p1: 3 });
+    assert.equal(c.score_0_100, 100);
+    assert.equal(c.task_guidance, "met");
+    assert.ok(!c.task_guidance_coerced);
+  });
+
+  test("J: same fixture with guidanceRequired is coerced and capped (69)", () => {
+    const c = card(product, { p1: 3 }, {}, true);
+    assert.equal(c.score_0_100, 69);
+    assert.equal(c.task_guidance_coerced, true);
   });
 });
