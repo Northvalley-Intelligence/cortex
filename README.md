@@ -19,6 +19,8 @@ npm run validate  # the two-pass Validation Gate (requires real Ollama)
 
 Provider credentials live in `.env.local` (gitignored). See `.env.local.example`.
 
+The npm scripts also load the shared OpenRouter key file `~/code/.northvalley/openrouter.env` (if present) before `.env.local`. Later files override earlier ones, so a repo-local `.env.local` wins over the shared file, and a variable already set in the real environment wins over both.
+
 ## API
 
 See `HANDOFF.md` for the full contract and per-caller retrofit guidance. Core endpoints:

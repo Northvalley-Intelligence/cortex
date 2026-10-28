@@ -8,8 +8,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "start": "node --env-file-if-exists=.env.local src/server.mjs",
-    "test": "node --env-file-if-exists=.env.local --test \"test/*.test.mjs\"",
-    "validate": "node --env-file-if-exists=.env.local scripts/validation-gate.mjs"
+    "start": "node --env-file-if-exists=$HOME/code/.northvalley/openrouter.env --env-file-if-exists=.env.local src/server.mjs",
+    "test": "node --env-file-if-exists=$HOME/code/.northvalley/openrouter.env --env-file-if-exists=.env.local --test \"test/*.test.mjs\"",
+    "validate": "node --env-file-if-exists=$HOME/code/.northvalley/openrouter.env --env-file-if-exists=.env.local scripts/validation-gate.mjs"
   }
 }
